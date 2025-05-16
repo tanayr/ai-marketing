@@ -1,0 +1,35 @@
+Payments:
+    - [x] Add support of redirect to payment page after organization creation
+    - [x] Add support of stripe billing portal redirect
+    - [ ] Add support of lemon squeezy webhooks 
+    - [ ] Add support of lemon squeezy billing portal redirect
+
+Team Management:
+    - [x] Invite user to organization
+    - [x] Remove user from organization
+    - [x] Change user role
+    - [x] Add Team members quota by default
+
+Super Admin:
+    - [x] Create organization
+    - [x] Delete organization
+    - [x] List all organizations
+    - [x] Organization detail page
+    - [x] Change organization plan
+    - [x] View members of organization and change their role 
+
+    - [x] List all users
+    - [x] User detail page
+    - [x] Impersonate user
+
+Others:
+    - [ ] Waitlist
+    - [ ] Contact us form
+    - [ ] Roadmap page
+Documentation:
+    - [ ] Models
+    - [ ] Team Management
+    - [ ] Super Admin
+    - [ ] Plan Management
+    - [ ] Payments
+    - [ ] Impersonate user
