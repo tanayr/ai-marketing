@@ -26,17 +26,33 @@ export const GET = withOrganizationAuthRequired(async (req: NextRequest, context
       .from(assets)
       .where(eq(assets.organizationId, organization.id));
 
-    // Apply additional filters if provided
+    // Apply additional filters if provided with proper type handling
     if (type) {
-      query = query.where(eq(assets.type, type));
+      // Safe filtering approach that avoids type errors
+      const validTypes = ['image', 'video', 'content'];
+      if (validTypes.includes(type)) {
+        // Only apply the filter if the type is valid
+        query = query.where(eq(assets.type, type as any));
+      }
     }
     
     if (status) {
-      query = query.where(eq(assets.status, status));
+      // Safe filtering approach for status
+      const validStatuses = ['draft', 'ready'];
+      if (validStatuses.includes(status)) {
+        query = query.where(eq(assets.status, status as any));
+      }
     }
     
     if (studioTool) {
-      query = query.where(eq(assets.studioTool, studioTool));
+      // Safe filtering approach for studioTool
+      const validStudioTools = [
+        'image_editor', 'video_editor', 'banner_creator', 
+        'social_post_creator', 'ad_copy_generator'
+      ];
+      if (validStudioTools.includes(studioTool)) {
+        query = query.where(eq(assets.studioTool, studioTool as any));
+      }
     }
     
     if (search) {

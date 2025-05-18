@@ -6,3 +6,10 @@ export const rapidAPIConfig = {
     baseUrl: 'https://shopify-stores-info.p.rapidapi.com',
   },
 };
+
+// OpenAI API configuration
+export const openAIConfig = {
+  apiKey: process.env.OPENAI_API_KEY || '',
+  baseUrl: 'https://api.openai.com/v1',
+  defaultModel: 'gpt-image-1', // Most capable model for image generation
+};

@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { assets } from '@/db/schema';
+import { assets } from '@/db/schema/assets';
 import { eq, and } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import withOrganizationAuthRequired from '@/lib/auth/withOrganizationAuthRequired';
@@ -12,16 +12,22 @@ import { OrganizationRole } from '@/db/schema/organization';
 export const GET = withOrganizationAuthRequired(async (req: NextRequest, context) => {
   try {
     const organization = await context.session.organization;
-    const { params } = await context.params;
-    const assetId = params.id as string;
+    // Extract id from path segments to ensure we always get it
+    const id = req.nextUrl.pathname.split('/').pop();
+    const assetId = id as string;
     
     // Fetch the asset, ensuring it belongs to the current organization
-    const asset = await db.query.assets.findFirst({
-      where: and(
-        eq(assets.id, assetId),
-        eq(assets.organizationId, organization.id)
-      )
-    });
+    const result = await db
+      .select()
+      .from(assets)
+      .where(
+        and(
+          eq(assets.id, assetId),
+          eq(assets.organizationId, organization.id)
+        )
+      );
+    
+    const asset = result[0];
     
     if (!asset) {
       return NextResponse.json(
@@ -41,50 +47,52 @@ export const GET = withOrganizationAuthRequired(async (req: NextRequest, context
 }, OrganizationRole.enum.user);
 
 /**
- * PUT handler to update an existing asset
- * Accessible by any member of the organization
+ * PUT handler to update a specific asset
+ * Accessible by organization members with user role or higher
  */
 export const PUT = withOrganizationAuthRequired(async (req: NextRequest, context) => {
   try {
-    const user = await context.session.user;
     const organization = await context.session.organization;
-    const { params } = await context.params;
-    const assetId = params.id as string;
+    const user = await context.session.user;
+    // Extract id from path segments to ensure we always get it
+    const id = req.nextUrl.pathname.split('/').pop();
+    const assetId = id as string;
     
-    // Verify the asset exists and belongs to this organization
-    const existingAsset = await db.query.assets.findFirst({
-      where: and(
-        eq(assets.id, assetId),
-        eq(assets.organizationId, organization.id)
-      )
-    });
+    // Parse the request body
+    const body = await req.json();
     
-    if (!existingAsset) {
+    // Verify the asset exists and belongs to the organization
+    const existingAsset = await db
+      .select()
+      .from(assets)
+      .where(
+        and(
+          eq(assets.id, assetId),
+          eq(assets.organizationId, organization.id)
+        )
+      );
+    
+    if (!existingAsset.length) {
       return NextResponse.json(
         { error: 'Asset not found' },
         { status: 404 }
       );
     }
     
-    // Parse update data
-    const updateData = await req.json();
-    
     // Update the asset
     const [updatedAsset] = await db
       .update(assets)
       .set({
-        name: updateData.name !== undefined ? updateData.name : existingAsset.name,
-        type: updateData.type !== undefined ? updateData.type : existingAsset.type,
-        studioTool: updateData.studioTool !== undefined ? updateData.studioTool : existingAsset.studioTool,
-        status: updateData.status !== undefined ? updateData.status : existingAsset.status,
-        thumbnail: updateData.thumbnail !== undefined ? updateData.thumbnail : existingAsset.thumbnail,
-        content: updateData.content !== undefined ? updateData.content : existingAsset.content,
-        productId: updateData.productId !== undefined ? updateData.productId : existingAsset.productId,
-        notes: updateData.notes !== undefined ? updateData.notes : existingAsset.notes,
+        ...body,
         lastEditedById: user.id,
         updatedAt: new Date(),
       })
-      .where(eq(assets.id, assetId))
+      .where(
+        and(
+          eq(assets.id, assetId),
+          eq(assets.organizationId, organization.id)
+        )
+      )
       .returning();
     
     return NextResponse.json(updatedAsset);
@@ -99,33 +107,32 @@ export const PUT = withOrganizationAuthRequired(async (req: NextRequest, context
 
 /**
  * DELETE handler to remove an asset
- * Accessible by admin or owner roles only
+ * Accessible by any member of the organization
  */
 export const DELETE = withOrganizationAuthRequired(async (req: NextRequest, context) => {
   try {
     const organization = await context.session.organization;
-    const { params } = await context.params;
-    const assetId = params.id as string;
+    // Extract id from path segments to ensure we always get it
+    const id = req.nextUrl.pathname.split('/').pop();
+    const assetId = id as string;
     
-    // Verify the asset exists and belongs to this organization
-    const existingAsset = await db.query.assets.findFirst({
-      where: and(
-        eq(assets.id, assetId),
-        eq(assets.organizationId, organization.id)
+    // Delete the asset, ensuring it belongs to the current organization
+    const [deletedAsset] = await db
+      .delete(assets)
+      .where(
+        and(
+          eq(assets.id, assetId),
+          eq(assets.organizationId, organization.id)
+        )
       )
-    });
+      .returning();
     
-    if (!existingAsset) {
+    if (!deletedAsset) {
       return NextResponse.json(
-        { error: 'Asset not found' },
+        { error: 'Asset not found or already deleted' },
         { status: 404 }
       );
     }
-    
-    // Delete the asset
-    await db
-      .delete(assets)
-      .where(eq(assets.id, assetId));
     
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -135,4 +142,4 @@ export const DELETE = withOrganizationAuthRequired(async (req: NextRequest, cont
       { status: 500 }
     );
   }
-}, OrganizationRole.enum.admin);
+}, OrganizationRole.enum.user);

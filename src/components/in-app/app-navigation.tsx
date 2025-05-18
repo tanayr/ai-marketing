@@ -20,6 +20,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -118,23 +123,63 @@ export function AppNavigation({ isCollapsed, className }: AppNavigationProps) {
           </NavItem>
           
           {/* Studio section */}
-          <NavItem 
-            href="/app/studio" 
-            icon={Paintbrush} 
-            isCollapsed={isCollapsed}
-            isNew
-          >
-            Studios
-          </NavItem>
+          <div className="space-y-1">
+            <NavItem 
+              href="/app/studio" 
+              icon={Paintbrush} 
+              isCollapsed={isCollapsed}
+              isNew
+            >
+              Studios
+            </NavItem>
+            
+            {/* Studio submenu items */}
+            <div className={cn("ml-6 space-y-1", isCollapsed ? "hidden" : "block")}>
+              <Link 
+                href="/app/studio/cloner" 
+                className="flex items-center justify-between px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-md transition-colors"
+              >
+                <span>Cloner</span>
+                <span className="bg-gradient-to-r from-purple-500 to-blue-500 text-transparent bg-clip-text text-xs font-medium">v0.12</span>
+              </Link>
+              
+              <Link 
+                href="/app/ad-creator" 
+                className="flex items-center justify-between px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-md transition-colors"
+              >
+                <span>Ad Copy</span>
+                <span className="bg-gradient-to-r from-amber-500 to-pink-500 text-transparent bg-clip-text text-xs font-medium">v0.1</span>
+              </Link>
+            </div>
+          </div>
           
           {/* Assets section */}
-          <NavItem 
-            href="/app/assets" 
-            icon={FileImage} 
-            isCollapsed={isCollapsed}
-          >
-            My Assets
-          </NavItem>
+          <div className="space-y-1">
+            <NavItem 
+              href="/app/assets" 
+              icon={FileImage} 
+              isCollapsed={isCollapsed}
+            >
+              My Assets
+            </NavItem>
+            
+            {/* Assets submenu items */}
+            <div className={cn("ml-6 space-y-1", isCollapsed ? "hidden" : "block")}>
+              <Link 
+                href="/app/assets" 
+                className="flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-md transition-colors"
+              >
+                Generated
+              </Link>
+              
+              <Link 
+                href="/app/files" 
+                className="flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-md transition-colors"
+              >
+                Files
+              </Link>
+            </div>
+          </div>
           
           {/* Products section */}
           <NavItem 
