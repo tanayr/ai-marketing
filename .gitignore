@@ -40,3 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# credentials
+**/credentials.js
+**/credentials.json
+**/*-credentials.*
+**/*_credentials.*
+**/secrets.*
