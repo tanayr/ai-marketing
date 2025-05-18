@@ -7,16 +7,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
-  Boxes,
-  LifeBuoy,
-  Settings,
   Menu,
   ChevronLeft,
-  FileText,
-  Map,
-  CreditCard,
-  Users,
+  Settings
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -37,6 +30,7 @@ import { InAppFooter } from "@/components/layout/in-app-footer";
 import { UserDropdown } from "@/components/in-app/user-dropdown";
 import { PageLoader } from "@/components/in-app/page-loader";
 import { OrganizationSwitcher } from "@/components/in-app/organization-switcher";
+import { AppNavigation } from "@/components/in-app/app-navigation";
 
 function NavItem({
   href,
@@ -112,87 +106,17 @@ function SidebarContent({ className, isCollapsed }: { className?: string; isColl
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {/* Organization Switcher */}
-      <div className={cn("mb-6", isCollapsed ? "px-2" : "px-2")}>
+      <div className={cn("mb-4 flex-shrink-0", isCollapsed ? "px-2" : "px-2")}>
         <OrganizationSwitcher isCollapsed={isCollapsed} />
       </div>
 
-      {/* Main Navigation */}
-      <nav className={cn("space-y-1 flex-1", isCollapsed ? "px-2" : "px-2")}>
-        <NavItem href="/app" icon={LayoutDashboard} isCollapsed={isCollapsed}>
-          Dashboard
-        </NavItem>
-        <NavItem href="/app/stuff" icon={Boxes} isCollapsed={isCollapsed}>
-          Stuff
-        </NavItem>
-        <NavItem href="/app/support" icon={LifeBuoy} isCollapsed={isCollapsed}>
-          Support
-        </NavItem>
-        <NavItem
-          href="https://docs.indiekit.com"
-          icon={FileText}
-          isCollapsed={isCollapsed}
-          className="!text-muted-foreground hover:!text-accent-foreground"
-        >
-          Documentation
-        </NavItem>
-        <NavItem
-          href="https://roadmap.indiekit.com"
-          icon={Map}
-          isCollapsed={isCollapsed}
-          className="!text-muted-foreground hover:!text-accent-foreground"
-        >
-          Roadmap
-        </NavItem>
-      </nav>
+      {/* Import the modular navigation component - makes it fill the available space */}
+      <div className="flex-grow flex flex-col min-h-0 overflow-y-auto">
+        <AppNavigation isCollapsed={isCollapsed} />
+      </div>
 
-      {/* Divider */}
-      <div
-        className={cn(
-          "my-2 border-t border-border/40",
-          isCollapsed ? "mx-2" : "mx-2"
-        )}
-      />
-
-      {/* Bottom Navigation */}
-      <div className={cn("space-y-1", isCollapsed ? "px-2" : "px-2")}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className={cn(
-                "w-full justify-start gap-3 px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                "rounded-md",
-                isCollapsed && "justify-center px-2"
-              )}
-            >
-              <Settings className="h-5 w-5 text-inherit" />
-              {!isCollapsed && "Settings"}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align={isCollapsed ? "center" : "start"}
-            className="w-48"
-          >
-            <DropdownMenuItem asChild>
-              <Link href="/app/settings" className="flex items-center font-medium">
-                <Settings className="h-4 w-4 mr-2 text-inherit" />
-                General
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/app/settings/team" className="flex items-center font-medium">
-                <Users className="h-4 w-4 mr-2 text-inherit" />
-                Team
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/app/settings/billing" className="flex items-center font-medium">
-                <CreditCard className="h-4 w-4 mr-2 text-inherit" />
-                Billing
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* User dropdown */}
+      <div className={cn("mt-2 flex-shrink-0", isCollapsed ? "px-2" : "px-2")}>
         <UserDropdown 
           user={user || null} 
           variant={isCollapsed ? "compact" : "full"} 

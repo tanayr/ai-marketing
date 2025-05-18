@@ -2,16 +2,14 @@
 
 import * as React from "react"
 import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
-  Settings2,
-  SquareTerminal,
+  Store,
+  FileImage,
+  Paintbrush,
+  ShoppingBag,
+  CreditCard,
+  Settings,
+  Users,
+  Layers
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -27,97 +25,73 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 
-// This is sample data.
+// Application navigation data
 const data = {
   user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+    name: "User",
+    email: "user@example.com",
+    avatar: "/avatars/user.jpg",
   },
-  teams: [
-    {
-      name: "Acme Inc",
-      logo: GalleryVerticalEnd,
-      plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free",
-    },
-  ],
   navMain: [
     {
-      title: "IndieKit",
-      url: "/app",
-      icon: SquareTerminal,
-      isActive: true,
+      title: "Studios",
+      url: "/app/studio",
+      icon: Paintbrush,
+      items: [], // Currently empty as specified
+    },
+    {
+      title: "My Assets",
+      url: "/app/assets",
+      icon: FileImage,
       items: [
         {
-          title: "Dashboard",
-          url: "/app",
+          title: "All Assets",
+          url: "/app/assets",
         },
         {
-          title: "Projects",
-          url: "/app/projects",
-        },
-        {
-          title: "User Settings",
-          url: "/app/user/settings",
+          title: "Create New",
+          url: "/app/studio",
         },
       ],
     },
     {
-      title: "Models",
-      url: "/app/models",
-      icon: Bot,
+      title: "My Products",
+      url: "/app/products",
+      icon: ShoppingBag,
       items: [
         {
-          title: "Genesis",
-          url: "/app/models/genesis",
+          title: "Product Catalog",
+          url: "/app/products",
+        },
+      ],
+    },
+  ],
+  navBottom: [
+    {
+      title: "My Stores",
+      url: "/app/stores",
+      icon: Store,
+      items: [
+        {
+          title: "Stores",
+          url: "/app/stores",
         },
         {
-          title: "Explorer",
-          url: "/app/models/explorer",
-        },
-        {
-          title: "Quantum",
-          url: "/app/models/quantum",
+          title: "Products",
+          url: "/app/stores/products", 
         },
       ],
     },
     {
-      title: "Documentation",
-      url: "/app/docs",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Introduction",
-          url: "/app/docs/introduction",
-        },
-        {
-          title: "Get Started",
-          url: "/app/docs/getting-started",
-        },
-        {
-          title: "Tutorials",
-          url: "/app/docs/tutorials",
-        },
-        {
-          title: "Changelog",
-          url: "/app/docs/changelog",
-        },
-      ],
+      title: "Billing",
+      url: "/app/settings/billing",
+      icon: CreditCard,
+      items: [],
     },
     {
       title: "Settings",
       url: "/app/settings",
-      icon: Settings2,
+      icon: Settings,
       items: [
         {
           title: "General",
@@ -127,28 +101,15 @@ const data = {
           title: "Team",
           url: "/app/settings/team",
         },
-        {
-          title: "Billing",
-          url: "/app/settings/billing",
-        },
       ],
     },
   ],
-  projects: [
+  // Keep some projects for the team switcher
+  teams: [
     {
-      name: "Design Engineering",
-      url: "/app/projects/design",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "/app/projects/sales",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "/app/projects/travel",
-      icon: Map,
+      name: "Marketing Team",
+      logo: Layers,
+      plan: "Enterprise",
     },
   ],
 }
@@ -168,8 +129,13 @@ export function AppSidebar({ className, ...props }: React.ComponentProps<typeof 
       </SidebarHeader>
       <SidebarContent className="px-4 py-4">
         <div className="space-y-6">
+          {/* Top navigation section */}
           <NavMain items={data.navMain} />
-          <NavProjects projects={data.projects} />
+          
+          {/* Bottom navigation section with separator */}
+          <div className="pt-4 mt-6 border-t border-border/40">
+            <NavMain items={data.navBottom} />
+          </div>
         </div>
       </SidebarContent>
       <SidebarFooter className="border-t border-border/40 bg-background/50 p-4">

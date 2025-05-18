@@ -6,3 +6,4 @@ export * from "./plans";
 export * from "./stores";
 export * from "./shopify-products";
 export * from "./product-variants";
+export * from "./assets";
