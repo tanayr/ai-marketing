@@ -150,7 +150,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <TooltipProvider>
-      <div className="flex min-h-screen bg-background">
+      <div className="flex min-h-screen bg-background" style={{
+          backgroundImage: 'radial-gradient(hsl(var(--muted)) 2px, transparent 2px)',
+          backgroundSize: '30px 30px',
+          backgroundAttachment: 'fixed',
+          backgroundPosition: '-15px -15px'
+        }}>
         {/* Desktop Sidebar */}
         <div
           className={cn(
