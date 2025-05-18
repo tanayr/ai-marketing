@@ -7,6 +7,13 @@
 
 body {
   font-family: Inter, Helvetica, sans-serif;
+  background-image: radial-gradient(
+    hsl(var(--muted)) 2px,
+    transparent 2px
+  );
+  background-size: 30px 30px;
+  background-attachment: fixed;
+  background-position: -15px -15px;
 }
 
 /* Typography enhancements */
@@ -124,5 +131,90 @@ h1, h2, h3, h4 {
   /* Asymmetric radius */
   .radius-asymmetric {
     border-radius: 0.75rem 0.25rem;
+  }
+  
+  /* Apply glass effect to cards by default with a subtle version */
+  .card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(7px);
+    border: 1px solid rgba(var(--border), 0.15);
+    transition: all 0.2s ease;
+  }
+  
+  .dark .card {
+    background: rgba(20, 20, 30, 0.5);
+  }
+  
+  /* Apply hover effect to interactive elements */
+  button:not(.no-animation),
+  .button,
+  a[role="button"],
+  .card-interactive {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  button:not(.no-animation):hover,
+  .button:hover,
+  a[role="button"]:hover,
+  .card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Apply gradient borders to inputs and focused elements */
+  input:focus, 
+  select:focus, 
+  textarea:focus {
+    border-color: transparent;
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--background)),
+                0 0 0 4px hsl(var(--ring));
+    background-image: linear-gradient(hsl(var(--background)), hsl(var(--background))),
+                      linear-gradient(to right, hsl(var(--primary)), hsl(var(--accent)));
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+  }
+  
+  /* Enhance shadcn components */
+  .shadcn-button {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .shadcn-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    transition: 0.5s;
+  }
+  
+  .shadcn-button:hover::before {
+    left: 100%;
+  }
+  
+
+  
+  /* Enhance dialog/modals with glass effect */
+  .dialog,
+  [role="dialog"],
+  .modal {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(var(--border), 0.2);
+  }
+  
+  .dark .dialog,
+  .dark [role="dialog"],
+  .dark .modal {
+    background: rgba(20, 20, 30, 0.75);
   }
 }

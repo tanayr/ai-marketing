@@ -23,7 +23,8 @@ export const studioToolEnum = pgEnum("studio_tool", [
   "video_editor",
   "banner_creator",
   "social_post_creator",
-  "ad_copy_generator"
+  "ad_copy_generator",
+  "retouchr" // Add retouchr studio tool
 ]);
 
 // Content schema will vary based on the studio tool
@@ -37,6 +38,23 @@ export const assetContentSchema = z.object({
   dimensions: z.object({
     width: z.number().optional(),
     height: z.number().optional(),
+  }).optional(),
+  
+  // Fabric.js canvas data structure
+  fabricCanvas: z.object({
+    version: z.string().optional(),
+    objects: z.array(z.any()).optional(),
+    background: z.string().optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+  }).optional(),
+  
+  // Retouchr specific metadata
+  retouchr: z.object({
+    name: z.string().optional(),
+    lastSavedBy: z.string().optional(),
+    lastSavedAt: z.string().optional(),
+    usedImages: z.array(z.string()).optional(), // References to files.id
   }).optional(),
   
   // Any additional tool-specific data

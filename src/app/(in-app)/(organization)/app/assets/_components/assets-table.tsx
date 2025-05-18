@@ -88,9 +88,9 @@ export default function AssetsTable({ assets }: AssetsTableProps) {
                 </Badge>
               </TableCell>
               <TableCell>
-                {formatDistanceToNow(new Date(asset.updatedAt), { 
+                {asset.updatedAt ? formatDistanceToNow(new Date(asset.updatedAt), { 
                   addSuffix: true 
-                })}
+                }) : "Unknown"}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
@@ -100,7 +100,10 @@ export default function AssetsTable({ assets }: AssetsTableProps) {
                     </Link>
                   </Button>
                   <Button variant="ghost" size="icon" asChild>
-                    <Link href={`/app/studio?assetId=${asset.id}`}>
+                    <Link href={asset.studioTool === "image_editor" 
+                      ? `/app/studio/retouchr?id=${asset.id}` 
+                      : `/app/studio?assetId=${asset.id}`
+                    }>
                       <Edit className="h-4 w-4" />
                     </Link>
                   </Button>
