@@ -32,7 +32,7 @@ export const appConfig: AppConfigPublic = {
     facebook: "https://facebook.com/aimarketingsuite",
   },
   email: {
-    senderName: "AI Marketing Application",
-    senderEmail: "notifications@aimarketingapp.com",
+    senderName: "Tanay from AI Marketing",
+    senderEmail: "notifications@aimarketing.tanayr.com",
   },
 };
