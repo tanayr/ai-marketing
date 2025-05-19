@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { RetouchrStudio } from '@/components/studio/retouchr/retouchr-studio';
 import { useSearchParams } from 'next/navigation';
+import { useNavigation } from '@/lib/navigation/navigation-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +42,7 @@ export default function RetouchrStudioPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const assetId = searchParams.get('id');
+  const { setForceCollapsed } = useNavigation();
   
   const [designData, setDesignData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,6 +52,17 @@ export default function RetouchrStudioPage() {
   const [designHeight, setDesignHeight] = useState('600');
   const [backgroundColor, setBackgroundColor] = useState('#ffffff');
   const [isCreating, setIsCreating] = useState(false);
+
+  // Force sidebar to be collapsed when in retouchr studio
+  useEffect(() => {
+    // Set force collapsed when component mounts
+    setForceCollapsed(true);
+    
+    // Restore normal behavior when component unmounts
+    return () => {
+      setForceCollapsed(false);
+    };
+  }, [setForceCollapsed]);
 
   // Check if we're creating a new design or editing an existing one
   useEffect(() => {

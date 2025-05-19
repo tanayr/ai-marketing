@@ -6,6 +6,7 @@ import useOrganization from "@/lib/organizations/useOrganization";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { NavigationProvider, useNavigation } from "@/lib/navigation/navigation-context";
 import {
   Menu,
   ChevronLeft,
@@ -126,16 +127,18 @@ function SidebarContent({ className, isCollapsed }: { className?: string; isColl
   );
 }
 
-function AppLayout({ children }: { children: React.ReactNode }) {
+// Inner AppLayout that uses navigation context
+function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isLoading: isUserLoading } = useUser();
   const { organization, isLoading: isOrgLoading } = useOrganization();
-  const [isCollapsed, setIsCollapsed] = useState(true);
-
-  // Close mobile menu when route changes
   const pathname = usePathname();
+  const { isCollapsed, setIsCollapsed } = useNavigation();
+
+  // Watch for navigation changes
   useEffect(() => {
-    // Remove the setIsMobileOpen call since we no longer need it
+    // No explicit action needed when route changes
+    // Navigation state is controlled by the context now
   }, [pathname]);
 
   useEffect(() => {
@@ -216,6 +219,15 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     </TooltipProvider>
+  );
+}
+
+// Wrapper component that provides navigation context
+function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <NavigationProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </NavigationProvider>
   );
 }
 
