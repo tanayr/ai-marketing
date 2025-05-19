@@ -27,6 +27,16 @@ import {
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
+// CSS override to remove padding and width restrictions on parent containers
+const removeParentPadding = `
+  :where(.p-6) {
+    padding: 0 !important;
+  }
+  :where(.max-w-7xl) {
+    max-width: 100% !important; 
+  }
+`;
+
 export default function RetouchrStudioPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -141,111 +151,103 @@ export default function RetouchrStudioPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
-      <div className="p-4 border-b flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {isLoading ? 'Loading...' : designData?.name || 'Retouchr Studio'}
-          </h1>
-          <p className="text-muted-foreground">
-            Design images with our powerful editor
-          </p>
-        </div>
-
-        <Button onClick={() => setShowNewDesignDialog(true)}>
-          New Design
-        </Button>
-      </div>
+    <>
+      <style jsx global>{removeParentPadding}</style>
+      <div className="h-[calc(100vh-4rem)] flex flex-col overflow-hidden">
 
       {/* NewDesign Dialog */}
       <Dialog open={showNewDesignDialog} onOpenChange={setShowNewDesignDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Design</DialogTitle>
-            <DialogDescription>
-              Set up the dimensions and properties for your new design.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-md p-0">
+          <div className="p-6 sm:p-8">
+            <DialogHeader className="pb-4">
+              <DialogTitle>Create New Design</DialogTitle>
+              <DialogDescription>
+                Set up the dimensions and properties for your new design.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="design-name">Design Name</Label>
-              <Input
-                id="design-name"
-                value={newDesignName}
-                onChange={(e) => setNewDesignName(e.target.value)}
-                placeholder="My Awesome Design"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="design-width">Width (px)</Label>
+                <Label htmlFor="design-name">Design Name</Label>
                 <Input
-                  id="design-width"
-                  value={designWidth}
-                  onChange={(e) => setDesignWidth(e.target.value.replace(/\D/g, ''))}
-                  type="number"
-                  min="50"
-                  max="3000"
+                  id="design-name"
+                  value={newDesignName}
+                  onChange={(e) => setNewDesignName(e.target.value)}
+                  placeholder="My Awesome Design"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="design-height">Height (px)</Label>
-                <Input
-                  id="design-height"
-                  value={designHeight}
-                  onChange={(e) => setDesignHeight(e.target.value.replace(/\D/g, ''))}
-                  type="number"
-                  min="50"
-                  max="3000"
-                />
-              </div>
-            </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="design-width">Width (px)</Label>
+                  <Input
+                    id="design-width"
+                    value={designWidth}
+                    onChange={(e) => setDesignWidth(e.target.value.replace(/\D/g, ''))}
+                    type="number"
+                    min="50"
+                    max="3000"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="background-color">Background Color</Label>
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-8 h-8 rounded border"
-                  style={{ backgroundColor }}
-                />
-                <Input
-                  id="background-color"
-                  value={backgroundColor}
-                  onChange={(e) => setBackgroundColor(e.target.value)}
-                  placeholder="#ffffff"
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="design-height">Height (px)</Label>
+                  <Input
+                    id="design-height"
+                    value={designHeight}
+                    onChange={(e) => setDesignHeight(e.target.value.replace(/\D/g, ''))}
+                    type="number"
+                    min="50"
+                    max="3000"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="background-color">Background Color</Label>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-8 h-8 rounded border"
+                    style={{ backgroundColor }}
+                  />
+                  <Input
+                    id="background-color"
+                    value={backgroundColor}
+                    onChange={(e) => setBackgroundColor(e.target.value)}
+                    placeholder="#ffffff"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                // If there's an ID in URL, just close dialog
-                const params = new URLSearchParams(window.location.search);
-                if (params.get('id')) {
-                  setShowNewDesignDialog(false);
-                } else {
-                  // Otherwise go to main studio page
-                  router.push('/app/studio');
-                }
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleCreateNewDesign} disabled={isCreating}>
-              {isCreating ? 'Creating...' : 'Create Design'}
-            </Button>
-          </DialogFooter>
+          <div className="p-6 sm:p-8 pt-0">
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // If there's an ID in URL, just close dialog
+                  const params = new URLSearchParams(window.location.search);
+                  if (params.get('id')) {
+                    setShowNewDesignDialog(false);
+                  } else {
+                    // Otherwise go to main studio page
+                    router.push('/app/studio');
+                  }
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleCreateNewDesign} disabled={isCreating}>
+                {isCreating ? 'Creating...' : 'Create Design'}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Main Content / Retouchr Studio */}
-      <div className="flex-1 overflow-hidden">
+      {/* Main Content / Retouchr Studio - Modified to use full space */}
+      <div className="flex-1 overflow-hidden w-full h-full">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -255,11 +257,17 @@ export default function RetouchrStudioPage() {
           </div>
         ) : (
           <>
-            <RetouchrStudio 
-              assetId={assetId || undefined} 
-              initialData={designData} 
-              onSave={handleSaveDesign} 
-            />
+            <div className="flex-1 overflow-hidden w-full h-full">
+              <RetouchrStudio 
+                assetId={assetId || undefined} 
+                initialData={designData} 
+                onSave={handleSaveDesign} 
+                defaultCollapsed={true}
+                designName={designData?.name || 'Untitled Design'}
+                lastUpdated={designData?.updatedAt ? new Date(designData.updatedAt).toLocaleString() : undefined}
+                onNewDesign={() => setShowNewDesignDialog(true)}
+              />
+            </div>
             {/* Debug info */}
             {process.env.NODE_ENV === 'development' && designData ? (
               <div className="hidden">
@@ -271,5 +279,6 @@ export default function RetouchrStudioPage() {
         )}
       </div>
     </div>
+    </>
   );
 }

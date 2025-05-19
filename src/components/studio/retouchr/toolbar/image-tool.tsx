@@ -72,10 +72,13 @@ export const ImageTool: React.FC = () => {
           originY: 'center',
         });
         
-        // Add image to canvas
-        canvas.add(img);
-        canvas.setActiveObject(img);
+        // Add image to canvas - cast to any to avoid TypeScript errors
+        canvas.add(img as any);
+        canvas.setActiveObject(img as any);
         canvas.renderAll();
+        
+        // Dismiss loading toast
+        toast.dismiss();
       },
       {
         crossOrigin: 'anonymous'
@@ -84,42 +87,45 @@ export const ImageTool: React.FC = () => {
   };
   
   return (
-    <div className="space-y-4 p-4">
-      <h3 className="font-medium text-sm">Image Tool</h3>
-      
-      <Tabs defaultValue="upload">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="upload">Upload</TabsTrigger>
-          <TabsTrigger value="url">From URL</TabsTrigger>
+    <div className="space-y-3 p-3">
+      <Tabs defaultValue="upload" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-2">
+          <TabsTrigger value="upload" className="text-xs py-1">Upload</TabsTrigger>
+          <TabsTrigger value="url" className="text-xs py-1">URL</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="upload" className="pt-4">
-          <FileUploader
-            onFileUploaded={handleImageUploaded}
-            acceptTypes="image/*"
-            buttonText="Upload Image"
-            maxSizeMB={5}
-          />
+        <TabsContent value="upload" className="space-y-3 pt-1">
+          <div className="space-y-2">
+            <FileUploader
+              onFileUploaded={handleImageUploaded}
+              acceptTypes="image/*"
+              buttonText="Upload Image"
+              maxSizeMB={5}
+              className="h-24"
+            />
+          </div>
         </TabsContent>
         
-        <TabsContent value="url" className="pt-4">
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="image-url">Image URL</Label>
+        <TabsContent value="url" className="space-y-3 pt-1">
+          <div className="space-y-1">
+            <Label htmlFor="image-url" className="text-xs">Image URL</Label>
+            <div className="flex space-x-1">
               <Input
                 id="image-url"
+                className="h-8 text-xs"
+                placeholder="https://example.com/image.jpg"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://example.com/image.jpg"
               />
+              <Button 
+                onClick={handleAddImageFromUrl}
+                disabled={!imageUrl}
+                size="sm"
+                className="h-8"
+              >
+                Add
+              </Button>
             </div>
-            <Button
-              onClick={handleAddImageFromUrl}
-              disabled={!imageUrl}
-              className="w-full"
-            >
-              Add Image
-            </Button>
           </div>
         </TabsContent>
       </Tabs>

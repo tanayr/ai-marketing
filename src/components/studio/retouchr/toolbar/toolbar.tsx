@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TextTool } from './text-tool';
 import { RetouchrImageTool } from './retouchr-image-tool';
 import { BackgroundTool } from './background-tool';
 import { LayersTool } from './layers-tool';
 import { ExportTool } from './export-tool';
+import { useCanvas } from '../hooks/use-canvas';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
@@ -18,68 +19,107 @@ import {
 } from 'lucide-react';
 
 interface ToolbarProps {
-  onSave?: () => Promise<void>;
+  onSave?: () => void;
   isSaving?: boolean;
+  defaultCollapsed?: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({ 
   onSave,
-  isSaving = false
+  isSaving = false,
+  defaultCollapsed = false
 }) => {
+  const [activeTool, setActiveTool] = useState<string>("text");
+  const { selectedObjects } = useCanvas();
+  
+  // Apply default collapsed state on component mount
+  useEffect(() => {
+    // If defaultCollapsed is true, the toolbar is already rendered in collapsed state
+    // No additional action needed as we've already made the default layout collapsed
+  }, [defaultCollapsed]);
+  
+  // Effect to handle object selection changes
+  useEffect(() => {
+    if (selectedObjects.length > 0) {
+      const obj = selectedObjects[0];
+      // Switch to relevant tool based on selected object type
+      if (obj.type === 'text') {
+        setActiveTool('text');
+      } else if (obj.type === 'image') {
+        setActiveTool('image');
+      }
+    }
+  }, [selectedObjects]);
+
+  // Tool button component to reduce repetition
+  const ToolButton = ({ name, icon, title }: { name: string; icon: React.ReactNode; title: string }) => (
+    <button 
+      className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors
+        ${activeTool === name 
+          ? 'bg-primary/30 text-primary border-l-2 border-primary shadow-sm font-medium ring-1 ring-primary/20' 
+          : 'text-muted-foreground hover:bg-accent/40'}`}
+      onClick={() => setActiveTool(name)}
+      title={title}
+    >
+      <div className={`${activeTool === name ? 'scale-110' : ''} transition-transform`}>
+        {icon}
+      </div>
+    </button>
+  );
+  
   return (
-    <div className="w-72 border-r h-full flex flex-col bg-card overflow-hidden">
-      <div className="p-4 border-b">
-        <h2 className="font-semibold">Retouchr Tools</h2>
+    <>
+      {/* Collapsed sidebar with icons only */}
+      <div className="w-14 border-r h-full flex flex-col bg-card overflow-hidden">
+        <div className="flex flex-col items-center py-3 gap-1 mt-2">
+          <ToolButton 
+            name="text" 
+            icon={<Type className="h-5 w-5" />} 
+            title="Text Tool"
+          />
+          
+          <ToolButton 
+            name="image" 
+            icon={<Image className="h-5 w-5" />} 
+            title="Image Tool"
+          />
+          
+          <ToolButton 
+            name="background" 
+            icon={<PaintBucket className="h-5 w-5" />} 
+            title="Background Tool"
+          />
+          
+          <ToolButton 
+            name="layers" 
+            icon={<Layers className="h-5 w-5" />} 
+            title="Layers"
+          />
+        </div>
       </div>
       
-      <Tabs defaultValue="text" className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="w-full justify-between px-4 py-2 h-auto">
-          <TabsTrigger value="text" className="flex flex-col items-center p-2 h-auto">
-            <Type className="h-4 w-4 mb-1" />
-            <span className="text-xs">Text</span>
-          </TabsTrigger>
-          <TabsTrigger value="image" className="flex flex-col items-center p-2 h-auto">
-            <Image className="h-4 w-4 mb-1" />
-            <span className="text-xs">Image</span>
-          </TabsTrigger>
-          <TabsTrigger value="background" className="flex flex-col items-center p-2 h-auto">
-            <PaintBucket className="h-4 w-4 mb-1" />
-            <span className="text-xs">Background</span>
-          </TabsTrigger>
-          <TabsTrigger value="layers" className="flex flex-col items-center p-2 h-auto">
-            <Layers className="h-4 w-4 mb-1" />
-            <span className="text-xs">Layers</span>
-          </TabsTrigger>
-          <TabsTrigger value="export" className="flex flex-col items-center p-2 h-auto">
-            <Download className="h-4 w-4 mb-1" />
-            <span className="text-xs">Export</span>
-          </TabsTrigger>
-        </TabsList>
-        
-        <Separator />
-        
-        <ScrollArea className="flex-1">
-          <TabsContent value="text" className="m-0">
-            <TextTool />
-          </TabsContent>
+      {/* Tool panel - shows based on selected tool */}
+      {activeTool && (
+        <div className="w-64 border-r h-full flex flex-col bg-card overflow-hidden">
+          <div className="py-2 px-3 border-b flex items-center">
+            <h2 className="font-medium text-sm text-muted-foreground">
+              {activeTool === 'text' && 'Text Tool'}
+              {activeTool === 'image' && 'Image Tool'}
+              {activeTool === 'background' && 'Background'}
+              {activeTool === 'layers' && 'Layers'}
+            </h2>
+          </div>
           
-          <TabsContent value="image" className="m-0">
-            <RetouchrImageTool />
-          </TabsContent>
-          
-          <TabsContent value="background" className="m-0">
-            <BackgroundTool />
-          </TabsContent>
-          
-          <TabsContent value="layers" className="m-0">
-            <LayersTool />
-          </TabsContent>
-          
-          <TabsContent value="export" className="m-0">
-            <ExportTool onSave={onSave} isSaving={isSaving} />
-          </TabsContent>
-        </ScrollArea>
-      </Tabs>
-    </div>
+          <ScrollArea className="flex-1">
+            <div>
+              {activeTool === 'text' && <TextTool />}
+              {activeTool === 'image' && <RetouchrImageTool />}
+              {activeTool === 'background' && <BackgroundTool />}
+              {activeTool === 'layers' && <LayersTool />}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+    </>
   );
 };

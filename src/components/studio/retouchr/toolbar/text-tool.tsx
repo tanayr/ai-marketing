@@ -37,6 +37,9 @@ export const TextTool: React.FC = () => {
   const [fontSize, setFontSize] = useState(24);
   const [textColor, setTextColor] = useState('#000000');
   const [backgroundColor, setBackgroundColor] = useState('');
+  const [bold, setBold] = useState(false);
+  const [italic, setItalic] = useState(false);
+  const [underline, setUnderline] = useState(false);
   
   // Update selected text
   const updateSelectedText = (property: string, value: any) => {
@@ -44,7 +47,9 @@ export const TextTool: React.FC = () => {
     
     const activeObject = canvas.getActiveObject();
     if (activeObject && activeObject.type === 'text') {
-      activeObject.set(property, value);
+      // Cast to any to bypass TypeScript errors with fabric.js types
+      const textObject = activeObject as any;
+      textObject.set(property, value);
       canvas.renderAll();
     }
   };
@@ -53,15 +58,22 @@ export const TextTool: React.FC = () => {
   const addText = () => {
     if (!canvas) return;
     
+    // Get canvas dimensions from the canvas object
+    const canvasWidth = (canvas as any).width || 800;
+    const canvasHeight = (canvas as any).height || 600;
+    
     const text = new fabric.Text(textValue, {
-      left: canvas.width! / 2,
-      top: canvas.height! / 2,
+      left: canvasWidth / 2,
+      top: canvasHeight / 2,
       originX: 'center',
       originY: 'center',
       fontFamily,
       fontSize,
       fill: textColor,
       backgroundColor: backgroundColor || undefined,
+      fontWeight: bold ? 'bold' : 'normal',
+      fontStyle: italic ? 'italic' : 'normal',
+      underline: underline,
     });
     
     canvas.add(text);
@@ -75,21 +87,39 @@ export const TextTool: React.FC = () => {
     
     const activeObject = canvas.getActiveObject();
     if (activeObject && activeObject.type === 'text') {
-      return (activeObject as fabric.Text).text;
+      return (activeObject as any).text;
     }
     
     return textValue;
   };
   
+  // Get current text properties from selected object
+  const updateTextPropertiesFromSelection = () => {
+    if (!canvas || selectedObjects.length === 0) return;
+    
+    const activeObject = canvas.getActiveObject();
+    if (activeObject && activeObject.type === 'text') {
+      const textObj = activeObject as any;
+      setTextValue(textObj.text);
+      setFontFamily(textObj.fontFamily);
+      setFontSize(textObj.fontSize);
+      setTextColor(textObj.fill);
+      setBackgroundColor(textObj.backgroundColor || '');
+      setBold(textObj.fontWeight === 'bold');
+      setItalic(textObj.fontStyle === 'italic');
+      setUnderline(textObj.underline || false);
+    }
+  };
+  
   return (
-    <div className="space-y-4 p-4">
-      <h3 className="font-medium text-sm">Text Tool</h3>
+    <div className="space-y-3 p-3">
       
       {/* Text input */}
-      <div className="space-y-2">
-        <Label htmlFor="text-input">Text</Label>
+      <div className="space-y-1">
+        <Label htmlFor="text-input" className="text-xs">Text</Label>
         <Input
           id="text-input"
+          className="h-8 text-xs"
           value={getCurrentTextValue()}
           onChange={(e) => {
             setTextValue(e.target.value);
@@ -101,8 +131,8 @@ export const TextTool: React.FC = () => {
       </div>
       
       {/* Font family */}
-      <div className="space-y-2">
-        <Label htmlFor="font-family">Font</Label>
+      <div className="space-y-1">
+        <Label htmlFor="font-family" className="text-xs">Font</Label>
         <Select
           value={fontFamily}
           onValueChange={(value) => {
@@ -110,7 +140,7 @@ export const TextTool: React.FC = () => {
             updateSelectedText('fontFamily', value);
           }}
         >
-          <SelectTrigger id="font-family">
+          <SelectTrigger id="font-family" className="h-8 text-xs">
             <SelectValue placeholder="Select font" />
           </SelectTrigger>
           <SelectContent>
@@ -124,9 +154,9 @@ export const TextTool: React.FC = () => {
       </div>
       
       {/* Font size */}
-      <div className="space-y-2">
+      <div className="space-y-1">
         <div className="flex justify-between">
-          <Label htmlFor="font-size">Size</Label>
+          <Label htmlFor="font-size" className="text-xs">Size</Label>
           <span className="text-xs text-muted-foreground">{fontSize}px</span>
         </div>
         <Slider
@@ -143,8 +173,8 @@ export const TextTool: React.FC = () => {
       </div>
       
       {/* Text color */}
-      <div className="space-y-2">
-        <Label>Text Color</Label>
+      <div className="space-y-1">
+        <Label className="text-xs">Text Color</Label>
         <ColorPicker
           color={textColor}
           onChange={(color) => {
@@ -155,8 +185,8 @@ export const TextTool: React.FC = () => {
       </div>
       
       {/* Background color */}
-      <div className="space-y-2">
-        <Label>Background Color</Label>
+      <div className="space-y-1">
+        <Label className="text-xs">Background Color</Label>
         <div className="flex items-center gap-2">
           <ColorPicker
             color={backgroundColor}
@@ -181,8 +211,51 @@ export const TextTool: React.FC = () => {
         </div>
       </div>
       
+      {/* Text style controls */}
+      <div className="space-y-1">
+        <Label className="text-xs">Text Style</Label>
+        <div className="flex space-x-1">
+          <Button 
+            variant={bold ? "default" : "outline"} 
+            size="sm" 
+            className="h-8 w-8 p-0 font-bold" 
+            onClick={() => {
+              const newValue = !bold;
+              setBold(newValue);
+              updateSelectedText('fontWeight', newValue ? 'bold' : 'normal');
+            }}
+          >
+            B
+          </Button>
+          <Button 
+            variant={italic ? "default" : "outline"} 
+            size="sm" 
+            className="h-8 w-8 p-0 italic" 
+            onClick={() => {
+              const newValue = !italic;
+              setItalic(newValue);
+              updateSelectedText('fontStyle', newValue ? 'italic' : 'normal');
+            }}
+          >
+            I
+          </Button>
+          <Button 
+            variant={underline ? "default" : "outline"} 
+            size="sm" 
+            className="h-8 w-8 p-0 underline" 
+            onClick={() => {
+              const newValue = !underline;
+              setUnderline(newValue);
+              updateSelectedText('underline', newValue);
+            }}
+          >
+            U
+          </Button>
+        </div>
+      </div>
+      
       {/* Add text button */}
-      <Button onClick={addText} className="w-full mt-4">
+      <Button onClick={addText} size="sm" className="w-full h-8 mt-2">
         Add Text
       </Button>
     </div>

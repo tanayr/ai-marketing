@@ -6,7 +6,8 @@ import { fabric, FabricCanvas } from './utils/fabric-imports';
 import { FabricCanvas as FabricCanvasComponent } from './core/fabric-canvas';
 import { Toolbar } from './toolbar/toolbar';
 import { Button } from '@/components/ui/button';
-import { Undo, Redo, ZoomIn, ZoomOut } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Undo, Redo, ZoomIn, ZoomOut, File, Plus, Minus, Maximize, Download } from 'lucide-react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { toast } from 'sonner';
 import { RetouchrAsset } from './types';
@@ -15,6 +16,10 @@ interface RetouchrStudioProps {
   assetId?: string;
   initialData?: any;
   onSave?: (data: any) => Promise<void>;
+  defaultCollapsed?: boolean;
+  designName?: string;
+  lastUpdated?: string;
+  onNewDesign?: () => void;
 }
 
 // Main Studio wrapper component
@@ -22,6 +27,10 @@ export const RetouchrStudio: React.FC<RetouchrStudioProps> = ({
   assetId,
   initialData,
   onSave,
+  defaultCollapsed = false,
+  designName,
+  lastUpdated,
+  onNewDesign,
 }) => {
   return (
     <CanvasProvider>
@@ -29,6 +38,10 @@ export const RetouchrStudio: React.FC<RetouchrStudioProps> = ({
         assetId={assetId}
         initialData={initialData}
         onSave={onSave}
+        defaultCollapsed={defaultCollapsed}
+        designName={designName}
+        lastUpdated={lastUpdated}
+        onNewDesign={onNewDesign}
       />
     </CanvasProvider>
   );
@@ -39,6 +52,10 @@ const RetouchrStudioContent: React.FC<RetouchrStudioProps> = ({
   assetId,
   initialData,
   onSave,
+  defaultCollapsed = false,
+  designName,
+  lastUpdated,
+  onNewDesign,
 }) => {
   const { 
     canvas, 
@@ -133,14 +150,17 @@ const RetouchrStudioContent: React.FC<RetouchrStudioProps> = ({
     }
   }, [canvas, redoStack]);
   
-  // Handle zooming
+  // Handle zooming with only CSS transform (no canvas.setZoom)
   const handleZoomIn = useCallback(() => {
     if (!canvas) return;
     
     const newZoom = Math.min(zoom + 0.1, 3);
     setZoom(newZoom);
     
-    canvas.setZoom(newZoom);
+    // No longer call canvas.setZoom() to avoid double-scaling
+    // Just update the state and let the CSS transform handle it
+    
+    // Ensure the canvas is updated
     canvas.renderAll();
   }, [canvas, zoom]);
   
@@ -150,22 +170,38 @@ const RetouchrStudioContent: React.FC<RetouchrStudioProps> = ({
     const newZoom = Math.max(zoom - 0.1, 0.1);
     setZoom(newZoom);
     
-    canvas.setZoom(newZoom);
+    // No longer call canvas.setZoom() to avoid double-scaling
+    // Just update the state and let the CSS transform handle it
+    
+    // Ensure the canvas is updated
     canvas.renderAll();
   }, [canvas, zoom]);
   
-  // Handle save
+  // Handle save with background image handling
   const handleSave = useCallback(async () => {
     if (!canvas || !onSave) return;
     
     try {
       setIsSaving(true);
+      
+      // Check if we need to handle locally stored background images
+      if (typeof window !== 'undefined') {
+        const localBgData = localStorage.getItem('retouchr_current_bg_image_data');
+        if (localBgData) {
+          // Background image data is already in localStorage and will be included
+          // in the canvas JSON when saveCanvas() is called
+          console.log('FRONTEND: Found locally cached background image, ensuring it gets saved');
+        }
+      }
+      
+      // Save the canvas (will include any background image)
       const canvasJSON = saveCanvas();
       
       // Log the canvas JSON being saved (frontend)
       console.log('FRONTEND: Saving canvas JSON:', canvasJSON);
       console.log('FRONTEND: JSON preview:', JSON.parse(canvasJSON));
       
+      // Send to server
       const result = await onSave({
         canvasJSON,
         createVersion: true,
@@ -205,104 +241,166 @@ const RetouchrStudioContent: React.FC<RetouchrStudioProps> = ({
   };
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Toolbar */}
-      <Toolbar onSave={handleSave} isSaving={isSaving} />
-      
-      {/* Canvas area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Canvas toolbar */}
-        <div className="h-12 border-b flex items-center justify-between px-4">
-          <div className="flex items-center space-x-2">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-background">
+      {/* Header */}
+      <div className="h-10 border-b bg-card px-3 py-1 flex items-center justify-between z-10">
+        <div className="flex items-center space-x-2">
+          <h1 className="text-lg font-semibold text-foreground mr-2">
+            {designName || (assetId ? 'Editing Design' : 'New Design')}
+          </h1>
+          
+          <div className="text-sm font-medium text-foreground">
+            {assetId ? 'Editing Design' : 'New Design'}
+          </div>
+          
+          <div className="flex items-center space-x-1 ml-4">
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
               onClick={handleUndo}
               disabled={undoStack.length <= 1}
               title="Undo (Ctrl+Z)"
+              className="h-8 w-8"
             >
               <Undo className="h-4 w-4" />
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
               onClick={handleRedo}
               disabled={redoStack.length === 0}
               title="Redo (Ctrl+Y)"
+              className="h-8 w-8"
             >
               <Redo className="h-4 w-4" />
             </Button>
             
-            <div className="text-xs text-muted-foreground hidden sm:inline-block ml-2">
-              <kbd className="px-1 py-0.5 bg-muted rounded border">Ctrl+Z</kbd> Undo / 
-              <kbd className="px-1 py-0.5 bg-muted rounded border">Ctrl+Y</kbd> Redo
-            </div>
-          </div>
-          
-          <div>
-            <span className="text-sm font-medium">
-              {assetId ? 'Editing Design' : 'New Design'}
-            </span>
-          </div>
-          
-          <div className="flex items-center space-x-3">
+            <div className="border-l h-5 mx-2" />
+            
             <div className="flex items-center">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 onClick={handleZoomOut}
                 disabled={zoom <= 0.2}
                 title="Zoom Out"
+                className="h-8 w-8"
               >
-                <ZoomOut className="h-4 w-4" />
+                <Minus className="h-4 w-4" />
               </Button>
-              <span className="text-sm w-12 text-center">
+              <span className="text-xs w-10 text-center font-mono">
                 {Math.round(zoom * 100)}%
               </span>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 onClick={handleZoomIn}
                 disabled={zoom >= 3}
                 title="Zoom In"
+                className="h-8 w-8"
               >
-                <ZoomIn className="h-4 w-4" />
+                <Plus className="h-4 w-4" />
               </Button>
-            </div>
-            
-            <div className="flex items-center gap-1.5">
-              <div className="text-xs text-muted-foreground hidden md:inline-block">
-                <kbd className="px-1 py-0.5 bg-muted rounded border">Ctrl+S</kbd>
-              </div>
               <Button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="bg-green-600 text-white hover:bg-green-700"
-                size="sm"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  if (canvas) {
+                    setZoom(1); 
+                    canvas.renderAll();
+                  }
+                }}
+                title="Reset Zoom"
+                className="h-8 w-8 ml-1"
               >
-                {isSaving ? (
-                  <>
-                    <span className="mr-1 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-                    Saving...
-                  </>
-                ) : (
-                  <>Save Design</>
-                )}
+                <Maximize className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </div>
         
-        {/* Canvas container */}
-        <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center p-6">
-          <div className="shadow-lg">
-            <FabricCanvasComponent
-              width={initialData?.content?.fabricCanvas?.width || 800}
-              height={initialData?.content?.fabricCanvas?.height || 600}
-              backgroundColor={initialData?.content?.fabricCanvas?.background || '#ffffff'}
-              initialJSON={initialData?.content?.fabricCanvas ? JSON.stringify(initialData.content.fabricCanvas) : undefined}
-              onCanvasReady={handleCanvasReady}
-            />
+        <div className="flex items-center space-x-3">
+          {lastUpdated && (
+            <span className="text-xs text-muted-foreground">
+              Last updated: {lastUpdated}
+            </span>
+          )}
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 px-2 text-xs" 
+            onClick={() => {
+              if (onNewDesign) {
+                // Use the provided onNewDesign callback if available
+                onNewDesign();
+              } else if (canvas) {
+                // Clear the canvas (fallback behavior)
+                canvas.clear();
+                
+                // Reset the undo/redo stacks
+                const initialState = JSON.stringify(canvas);
+                setUndoStack([initialState]);
+                setRedoStack([]);
+                setCurrentState(initialState);
+                
+                toast.success("New design created");
+              }
+            }}
+          >
+            <File className="h-4 w-4 mr-1" />
+            New
+          </Button>
+          
+          <Button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            size="sm"
+          >
+            {isSaving ? (
+              <>
+                <span className="mr-1 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+                Saving...
+              </>
+            ) : (
+              <>Save Design</>
+            )}
+          </Button>
+        </div>
+      </div>
+      
+      {/* Main content area with sidebar and canvas - maximized for full height */}
+      <div className="flex flex-1 overflow-hidden h-[calc(100%-2.5rem)] w-full p-0 m-0">
+        {/* Left sidebar with tool icons only */}
+        <Toolbar onSave={handleSave} isSaving={isSaving} defaultCollapsed={defaultCollapsed} />
+        
+        {/* Canvas container maximized to use full space */}
+        <div className="flex-1 overflow-auto bg-muted/10 flex items-center justify-center p-0 m-0">
+          {/* Canvas container with minimal padding */}
+          <div 
+            className="relative shadow-md transform-gpu m-3" 
+            style={{
+              transform: `scale(${zoom})`,
+              transition: 'transform 0.2s ease-out',
+              backgroundColor: '#f7f7f7',
+              backgroundImage: 'linear-gradient(45deg, #f0f0f0 25%, transparent 25%), linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f0f0f0 75%), linear-gradient(-45deg, transparent 75%, #f0f0f0 75%)',
+              backgroundSize: '16px 16px',
+              backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+              padding: '0',
+              borderRadius: '4px',
+              border: '1px solid #e0e0e0'
+            }}
+          >
+            <div className="shadow-lg">
+              <FabricCanvasComponent
+                width={initialData?.content?.fabricCanvas?.width || 800}
+                height={initialData?.content?.fabricCanvas?.height || 600}
+                backgroundColor={initialData?.content?.fabricCanvas?.background || '#ffffff'}
+                initialJSON={initialData?.content?.fabricCanvas ? JSON.stringify(initialData.content.fabricCanvas) : undefined}
+                onCanvasReady={handleCanvasReady}
+              />
+            </div>
           </div>
         </div>
       </div>

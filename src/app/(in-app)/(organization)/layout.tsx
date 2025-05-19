@@ -130,7 +130,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isLoading: isUserLoading } = useUser();
   const { organization, isLoading: isOrgLoading } = useOrganization();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   // Close mobile menu when route changes
   const pathname = usePathname();
