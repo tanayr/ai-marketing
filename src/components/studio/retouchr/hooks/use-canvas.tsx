@@ -54,13 +54,18 @@ export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children
     }
   }, [canvas]);
   
-  // Save canvas state to JSON with explicit background image handling
+  // Save canvas state to JSON with explicit background image handling and dimensions
   const saveCanvas = useCallback(() => {
     if (!canvas) return '';
     
     // Create a complete JSON representation of the canvas
     // This includes objects, background color, and background image
     const jsonObj = canvas.toJSON(['id', 'name']);
+    
+    // Explicitly save canvas dimensions
+    // This ensures width and height are preserved even if fabric.toJSON() doesn't include them
+    jsonObj.width = canvas.width;
+    jsonObj.height = canvas.height;
     
     // Get the background image if it exists
     const bgImage = canvas.backgroundImage;
@@ -80,7 +85,9 @@ export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children
     }
     
     // Explicitly log what's being saved for debugging
-    console.log('Saving canvas with background:', {
+    console.log('Saving canvas with dimensions and background:', {
+      width: jsonObj.width,
+      height: jsonObj.height,
       backgroundColor: canvas.backgroundColor,
       hasBackgroundImage: !!bgImage,
       objects: jsonObj.objects?.length || 0

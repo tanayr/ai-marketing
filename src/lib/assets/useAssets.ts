@@ -1,6 +1,7 @@
 import useSWR from "swr";
 import { toast } from "sonner";
 import { Asset } from "@/db/schema/assets";
+import useOrganization from "@/lib/organizations/useOrganization";
 
 export interface AssetFilter {
   type?: "image" | "video" | "content";
@@ -13,18 +14,36 @@ export interface AssetFilter {
  * Hook for managing assets at the organization level
  */
 export function useAssets(filters?: AssetFilter) {
+  // Get current organization context
+  const { organization, isLoading: orgLoading } = useOrganization();
+  
   // Build the query string from filters
   const queryParams = new URLSearchParams();
   if (filters?.type) queryParams.set("type", filters.type);
   if (filters?.status) queryParams.set("status", filters.status);
   if (filters?.studioTool) queryParams.set("studioTool", filters.studioTool);
   if (filters?.search) queryParams.set("search", filters.search);
-
+  
+  // Only proceed with the request if we have an organization ID
+  const organizationId = organization?.id;
+  const shouldFetch = !!organizationId && !orgLoading;
+  
   const queryString = queryParams.toString();
-  const apiUrl = `/api/app/assets${queryString ? `?${queryString}` : ""}`;
+  const apiUrl = shouldFetch ? `/api/app/assets${queryString ? `?${queryString}` : ""}` : null;
 
-  // Fetch assets with SWR
-  const { data, error, isLoading, mutate } = useSWR<Asset[]>(apiUrl);
+  // Fetch assets with SWR - use array as cache key to include organization context
+  const { data, error, isLoading: dataLoading, mutate } = useSWR<Asset[]>(
+    shouldFetch ? [apiUrl, organizationId] : null,
+    async ([url]) => {
+      const response = await fetch(url, {
+        headers: {
+          'X-Organization-ID': organizationId || ''
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch assets');
+      return response.json();
+    }
+  );
 
   /**
    * Create a new asset
@@ -114,12 +133,13 @@ export function useAssets(filters?: AssetFilter) {
 
   return {
     assets: data || [],
-    isLoading,
+    isLoading: orgLoading || dataLoading,
     error,
     mutate,
     createAsset,
     updateAsset,
     deleteAsset,
+    organizationId
   };
 }
 
@@ -127,8 +147,22 @@ export function useAssets(filters?: AssetFilter) {
  * Hook for managing a single asset
  */
 export function useAsset(id: string) {
-  const { data, error, isLoading, mutate } = useSWR<Asset>(
-    id ? `/api/app/assets/${id}` : null
+  // Get current organization context
+  const { organization, isLoading: orgLoading } = useOrganization();
+  const organizationId = organization?.id;
+  const shouldFetch = !!id && !!organizationId && !orgLoading;
+  
+  const { data, error, isLoading: dataLoading, mutate } = useSWR<Asset>(
+    shouldFetch ? [`/api/app/assets/${id}`, organizationId] : null,
+    async ([url]) => {
+      const response = await fetch(url, {
+        headers: {
+          'X-Organization-ID': organizationId || ''
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch asset');
+      return response.json();
+    }
   );
 
   /**
@@ -163,9 +197,10 @@ export function useAsset(id: string) {
 
   return {
     asset: data,
-    isLoading,
+    isLoading: orgLoading || dataLoading,
     error,
     mutate,
     updateAsset,
+    organizationId
   };
 }

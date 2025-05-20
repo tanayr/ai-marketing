@@ -12,9 +12,24 @@ import { OrganizationRole } from '@/db/schema/organization';
 export const GET = withOrganizationAuthRequired(async (req: NextRequest, context) => {
   try {
     const organization = await context.session.organization;
+    const user = await context.session.user;
+    
+    // Get the organization ID from the session
+    const sessionOrgId = organization.id;
+    
+    // Double-check with the header (if present)
+    const headerOrgId = req.headers.get('X-Organization-ID');
+    
+    // If header is present and doesn't match session, log a warning
+    if (headerOrgId && headerOrgId !== sessionOrgId) {
+      console.warn(`Organization ID mismatch: session=${sessionOrgId}, header=${headerOrgId}`);
+    }
+    
     // Extract id from path segments to ensure we always get it
     const id = req.nextUrl.pathname.split('/').pop();
     const assetId = id as string;
+    
+    console.log(`Fetching asset ${assetId} for organization: ${organization.id}, user: ${user.id}`);
     
     // Fetch the asset, ensuring it belongs to the current organization
     const result = await db

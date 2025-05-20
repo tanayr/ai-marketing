@@ -12,6 +12,22 @@ import { OrganizationRole } from '@/db/schema/organization';
 export const GET = withOrganizationAuthRequired(async (req: NextRequest, context) => {
   try {
     const organization = await context.session.organization;
+    const user = await context.session.user;
+    
+    // Get the organization ID from the session
+    const sessionOrgId = organization.id;
+    
+    // Double-check with the header (if present)
+    const headerOrgId = req.headers.get('X-Organization-ID');
+    
+    // If header is present and doesn't match session, log a warning
+    if (headerOrgId && headerOrgId !== sessionOrgId) {
+      console.warn(`Organization ID mismatch: session=${sessionOrgId}, header=${headerOrgId}`);
+    }
+    
+    // Log organization info for debugging
+    console.log(`Fetching assets for organization: ${organization.id}, user: ${user.id}`);
+    
     const { searchParams } = new URL(req.url);
     
     // Parse query parameters for filtering
@@ -20,53 +36,57 @@ export const GET = withOrganizationAuthRequired(async (req: NextRequest, context
     const studioTool = searchParams.get('studioTool');
     const search = searchParams.get('search');
 
-    // Build query with filters
-    let query = db
-      .select()
-      .from(assets)
-      .where(eq(assets.organizationId, organization.id));
-
+    // Build the query with all conditions in one go to avoid TypeScript errors
+    const conditions = [];
+    
+    // Always filter by organization ID - this is required
+    conditions.push(eq(assets.organizationId, sessionOrgId));
+    
     // Apply additional filters if provided with proper type handling
     if (type) {
-      // Safe filtering approach that avoids type errors
       const validTypes = ['image', 'video', 'content'];
       if (validTypes.includes(type)) {
-        // Only apply the filter if the type is valid
-        query = query.where(eq(assets.type, type as any));
+        conditions.push(eq(assets.type, type as any));
       }
     }
     
     if (status) {
-      // Safe filtering approach for status
       const validStatuses = ['draft', 'ready'];
       if (validStatuses.includes(status)) {
-        query = query.where(eq(assets.status, status as any));
+        conditions.push(eq(assets.status, status as any));
       }
     }
     
     if (studioTool) {
-      // Safe filtering approach for studioTool
       const validStudioTools = [
         'image_editor', 'video_editor', 'banner_creator', 
-        'social_post_creator', 'ad_copy_generator'
+        'social_post_creator', 'ad_copy_generator', 'retouchr'
       ];
       if (validStudioTools.includes(studioTool)) {
-        query = query.where(eq(assets.studioTool, studioTool as any));
+        conditions.push(eq(assets.studioTool, studioTool as any));
       }
     }
     
     if (search) {
-      query = query.where(like(assets.name, `%${search}%`));
+      conditions.push(like(assets.name, `%${search}%`));
     }
     
-    // Order by most recently updated
-    query = query.orderBy(desc(assets.updatedAt));
+    // Apply all filters using and() on the conditions array and order by most recently updated
+    const results = await db
+      .select()
+      .from(assets)
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+      .orderBy(desc(assets.updatedAt));
     
-    const results = await query;
+    console.log(`Found ${results.length} assets for organization: ${organization.id}`);
     
     return NextResponse.json(results);
   } catch (error) {
     console.error('Error fetching assets:', error);
+    // Log any organization ID issues
+    if (error instanceof Error) {
+      console.error(`Organization context error: ${error.message}`);
+    }
     return NextResponse.json(
       { error: 'Failed to fetch assets' }, 
       { status: 500 }
