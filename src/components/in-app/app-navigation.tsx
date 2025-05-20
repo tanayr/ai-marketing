@@ -150,6 +150,14 @@ export function AppNavigation({ isCollapsed, className }: AppNavigationProps) {
                 <span>Retouchr</span>
                 <span className="bg-gradient-to-r from-teal-400 to-emerald-500 text-transparent bg-clip-text text-xs font-medium">v0.2.1</span>
               </Link>
+
+              <Link 
+                href="/app/studio/lookr" 
+                className="flex items-center justify-between px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-md transition-colors"
+              >
+                <span>Lookr</span>
+                <span className="bg-gradient-to-r from-blue-400 to-emerald-500 text-transparent bg-clip-text text-xs font-medium">v0.3.3</span>
+              </Link>
               
               <Link 
                 href="/app/ad-creator" 

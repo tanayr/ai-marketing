@@ -12,10 +12,21 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Paintbrush, Copy, MessageSquare } from 'lucide-react';
+import { ArrowRight, Paintbrush, Copy, MessageSquare, Shirt } from 'lucide-react';
 
 // Define studio data - in a real app this might come from an API or database
 const studios = [
+  {
+    id: 'lookr',
+    name: 'Lookr Studio',
+    description: 'Try on products with AI avatars and see how they look',
+    icon: Shirt,
+    color: 'from-blue-400 to-indigo-500',
+    version: 'v0.1',
+    url: '/app/studio/lookr',
+    isPremium: false,
+    isNew: true
+  },
   {
     id: 'retouchr',
     name: 'Retouchr Studio',
@@ -25,7 +36,7 @@ const studios = [
     version: 'v0.2.1',
     url: '/app/studio/retouchr',
     isPremium: false,
-    isNew: true
+    isNew: false
   },
   {
     id: 'cloner',
@@ -47,7 +58,7 @@ const studios = [
     version: 'v0.1',
     url: '/app/ad-creator',
     isPremium: false,
-    isNew: true
+    isNew: false
   }
 ];
 

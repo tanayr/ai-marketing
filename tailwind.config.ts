@@ -81,6 +81,27 @@ export default {
   					height: 'var(--radix-accordion-content-height)'
   				}
   			},
+  			'scanDownward': {
+  				'0%': {
+  					top: '0%',
+  					opacity: '0.8'
+  				},
+  				'50%': {
+  					opacity: '0.6'
+  				},
+  				'100%': {
+  					top: '98%',
+  					opacity: '0.8'
+  				}
+  			},
+  			'shimmer': {
+  				'0%': {
+  					transform: 'translateX(-100%)'
+  				},
+  				'100%': {
+  					transform: 'translateX(100%)'
+  				}
+  			},
   			'accordion-up': {
   				from: {
   					height: 'var(--radix-accordion-content-height)'
@@ -152,6 +173,8 @@ export default {
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
+  			'scanDownward': 'scanDownward 3s ease-in-out infinite',
+  			'shimmer': 'shimmer 2s ease-in-out infinite',
   			marquee: 'marquee var(--duration) infinite linear',
   			'marquee-vertical': 'marquee-vertical var(--duration) linear infinite',
   			'shimmer-slide': 'shimmer-slide var(--speed) ease-in-out infinite alternate',

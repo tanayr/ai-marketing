@@ -51,32 +51,12 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'picsum.photos',
+        hostname: '*',
       },
       {
-        protocol: 'https',
-        hostname: 'i.pravatar.cc',
-      },
-      {
-        protocol: 'https',
-        hostname: 'startup-template-sage.vercel.app',
-      },
-      {
-        protocol: 'https',
-        hostname: 'cdn.shopify.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'd3u5pbhtl21lu1.cloudfront.net',
-      },
-      {
-        protocol: 'https',
-        hostname: 'd3u5pbhtl21lu1.cloudfront.net',
-      },
-      {
-        protocol: 'https',
-        hostname: 'marketingwithai42.s3.us-east-2.amazonaws.com',
-      },
+        protocol: 'http',
+        hostname: '*',
+      }
     ],
   },
 };

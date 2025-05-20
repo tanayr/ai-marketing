@@ -24,7 +24,8 @@ export const studioToolEnum = pgEnum("studio_tool", [
   "banner_creator",
   "social_post_creator",
   "ad_copy_generator",
-  "retouchr" // Add retouchr studio tool
+  "retouchr", // Add retouchr studio tool
+  "lookr" // Add lookr studio tool
 ]);
 
 // Content schema will vary based on the studio tool
