@@ -5,6 +5,8 @@ import { FashnAIClient } from "@/lib/external-api/fashn-ai-client";
 import { db } from "@/db";
 import { avatars } from "@/db/schema/avatars";
 import { eq, and, sql } from "drizzle-orm";
+import { inngest } from "@/lib/inngest/client"; // Renamed to avoid conflict
+import { lookrPredictions } from "@/db/schema/lookr_predictions";
 
 // Validation schema for creating a prediction
 const createPredictionSchema = z.object({
@@ -73,23 +75,73 @@ export const POST = withOrganizationAuthRequired(async (req, context) => {
     const fashnAIClient = new FashnAIClient(apiKey);
     
     // Make the API call to create a prediction
-    const prediction = await fashnAIClient.createPrediction(
+    const fashnAiApiResponse = await fashnAIClient.createPrediction(
       avatar.imageUrl,           // model_image
       validData.productSource.url, // garment_image
       validData.options || {}
     );
     
-    if (prediction.error) {
+    // Handle FashnAI's own error response first
+    if (fashnAiApiResponse.error) {
       return NextResponse.json(
-        { error: prediction.error },
-        { status: 400 }
+        { error: fashnAiApiResponse.error },
+        { status: 400 } // Or appropriate status based on FashnAI error
       );
     }
+
+    // Assuming fashnAiApiResponse.id is the prediction ID from Fashn.ai
+    // If FashnAI uses 'prediction_id', this should be fashnAiApiResponse.prediction_id
+    const fashnAiPredictionId = fashnAiApiResponse.id; 
     
-    return NextResponse.json(prediction);
+    if (!fashnAiPredictionId) {
+        console.error("Fashn.ai prediction ID not found in response", fashnAiApiResponse);
+        // Still return the original response to the client as it might contain error details from FashnAI
+        return NextResponse.json(fashnAiApiResponse); 
+    }
+
+    try {
+      // Create a record in our database
+      const [newLookrPredictionRecord] = await db.insert(lookrPredictions).values({
+        fashnAiPredictionId: fashnAiPredictionId,
+        status: "PROCESSING", // Initial status
+        sourceModelImageUrl: avatar.imageUrl,
+        sourceGarmentImageUrl: validData.productSource.url,
+        inputParams: validData.options || {},
+        organizationId: organization.id,
+        createdById: context.session.user.id,
+        // poll_count is defaulted by DB, assetId is nullable, error_message is nullable
+      }).returning(); // Ensure you get the inserted record, especially its 'id'
+
+      if (!newLookrPredictionRecord) {
+          console.error("Failed to create lookr prediction record in DB for FashnAI ID:", fashnAiPredictionId);
+          // Even if DB insert fails, the job is created on FashnAI.
+          // For frontend compatibility, still return the FashnAI response.
+          // Log this error for backend monitoring.
+      } else {
+        // Send event to Inngest only if DB record was successfully created
+        await inngest.send({
+          name: "fashn.ai/prediction.poll",
+          data: {
+            lookrPredictionDbId: newLookrPredictionRecord.id,
+            fashnAiPredictionId: fashnAiPredictionId,
+            organizationId: organization.id,
+            createdById: context.session.user.id,
+            originalFileName: validData.productSource.name,
+          },
+        });
+      }
+    } catch (dbError) {
+      // Catch errors specifically from DB insert or Inngest send
+      console.error("Error during DB operation or Inngest send for FashnAI ID:", fashnAiPredictionId, dbError);
+      // Log this error for backend monitoring.
+      // The FashnAI job is already created, so we still return the original FashnAI response.
+    }
+    
+    // Return the original FashnAI API response to the client
+    return NextResponse.json(fashnAiApiResponse);
     
   } catch (error) {
-    console.error("Error creating prediction:", error);
+    console.error("Error creating prediction (outer try-catch):", error);
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
