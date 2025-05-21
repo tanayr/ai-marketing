@@ -7,3 +7,4 @@ export * from "./stores";
 export * from "./shopify-products";
 export * from "./product-variants";
 export * from "./assets";
+export * from "./lookr_predictions";
