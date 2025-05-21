@@ -18,7 +18,10 @@ import { toast } from 'sonner';
 import { RetouchrAsset } from './types';
 // Import text editing components
 import { TextFormattingProvider } from './text-editing/TextFormattingContext';
-import { FloatingTextToolbar } from './text-editing/FloatingTextToolbar';
+import { FixedTextToolbar } from './text-editing/FixedTextToolbar';
+
+// Import CSS variables for toolbar height
+import './styles.css';
 
 interface RetouchrStudioProps {
   assetId?: string;
@@ -52,8 +55,6 @@ export const RetouchrStudio: React.FC<RetouchrStudioProps> = ({
           lastUpdated={lastUpdated}
           onNewDesign={onNewDesign}
         />
-        {/* Floating text toolbar will appear when text is selected */}
-        <FloatingTextToolbar />
       </TextFormattingProvider>
     </CanvasProvider>
   );
@@ -378,19 +379,6 @@ const RetouchrStudioContent: React.FC<RetouchrStudioProps> = ({
               </>
             ) : (
               <>Save Design</>
-            )}
-          </Button>
-        </div>
-      </div>
-      
-      {/* Main content area with sidebar and canvas - maximized for full height */}
-      <div className="flex flex-1 overflow-hidden h-[calc(100%-2.5rem)] w-full p-0 m-0">
-        {/* Left sidebar with tool icons only */}
-        <Toolbar onSave={handleSave} isSaving={isSaving} defaultCollapsed={defaultCollapsed} />
-        
-        {/* Canvas container maximized to use full space */}
-        <div className="flex-1 overflow-auto bg-muted/10 flex items-center justify-center p-0 m-0">
-          {/* Canvas container with minimal padding */}
           <div 
             className="relative shadow-md transform-gpu m-3" 
             style={{

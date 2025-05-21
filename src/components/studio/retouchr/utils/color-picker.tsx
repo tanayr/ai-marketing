@@ -45,23 +45,22 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button 
-          variant="outline" 
-          className="w-full flex justify-between items-center h-10"
+          variant="ghost" 
+          size="sm"
+          className="h-7 w-7 p-0 flex items-center justify-center"
+          title={color || 'Transparent'}
         >
-          <div className="flex items-center gap-2">
-            <div 
-              className="w-5 h-5 rounded border" 
-              style={{ 
-                backgroundColor: color || 'transparent',
-                backgroundImage: !color && allowTransparent 
-                  ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)'
-                  : 'none',
-                backgroundSize: '6px 6px',
-                backgroundPosition: '0 0, 3px 3px'
-              }}
-            />
-            <span>{color || 'Transparent'}</span>
-          </div>
+          <div 
+            className="w-5 h-5 rounded border" 
+            style={{ 
+              backgroundColor: color || 'transparent',
+              backgroundImage: !color && allowTransparent 
+                ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)'
+                : 'none',
+              backgroundSize: '6px 6px',
+              backgroundPosition: '0 0, 3px 3px'
+            }}
+          />
           <span className="sr-only">Select color</span>
         </Button>
       </PopoverTrigger>

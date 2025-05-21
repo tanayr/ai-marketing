@@ -4,9 +4,17 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { fabric } from '../utils/fabric-imports';
 
 // Define Canvas context type
+// Define a more comprehensive FabricCanvas type that includes all methods we use
+interface ExtendedFabricCanvas extends fabric.Canvas {
+  discardActiveObject: () => fabric.Canvas;
+  backgroundImage: any;
+  backgroundColor: any;
+  setBackgroundColor: (color: string, callback?: Function) => fabric.Canvas;
+}
+
 export interface CanvasContextType {
-  canvas: fabric.Canvas | null;
-  setCanvas: (canvas: fabric.Canvas) => void;
+  canvas: ExtendedFabricCanvas | null;
+  setCanvas: (canvas: ExtendedFabricCanvas) => void;
   selectedObjects: fabric.Object[];
   clearSelection: () => void;
   canvasData: string | null;
@@ -22,25 +30,27 @@ const CanvasContext = createContext<CanvasContextType | null>(null);
 // Provider component
 export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   // Canvas state
-  const [canvas, setCanvasInstance] = useState<fabric.Canvas | null>(null);
+  const [canvas, setCanvasInstance] = useState<ExtendedFabricCanvas | null>(null);
   const [selectedObjects, setSelectedObjects] = useState<fabric.Object[]>([]);
   const [canvasData, setCanvasData] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
   // Set canvas and register event listeners
   const setCanvas = useCallback((canvas: fabric.Canvas) => {
-    setCanvasInstance(canvas);
+    // Cast to our extended type to satisfy TypeScript
+    const extendedCanvas = canvas as ExtendedFabricCanvas;
+    setCanvasInstance(extendedCanvas);
     
     // Set up event listeners for selection changes
-    canvas.on('selection:created', () => {
-      setSelectedObjects(canvas.getActiveObjects());
+    extendedCanvas.on('selection:created', () => {
+      setSelectedObjects(extendedCanvas.getActiveObjects());
     });
     
-    canvas.on('selection:updated', () => {
-      setSelectedObjects(canvas.getActiveObjects());
+    extendedCanvas.on('selection:updated', () => {
+      setSelectedObjects(extendedCanvas.getActiveObjects());
     });
     
-    canvas.on('selection:cleared', () => {
+    extendedCanvas.on('selection:cleared', () => {
       setSelectedObjects([]);
     });
   }, []);
@@ -48,6 +58,7 @@ export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children
   // Clear current selection
   const clearSelection = useCallback(() => {
     if (canvas) {
+      // The canvas instance has the discardActiveObject method at runtime
       canvas.discardActiveObject();
       canvas.renderAll();
       setSelectedObjects([]);
@@ -112,21 +123,102 @@ export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children
         objects: parsedData.objects?.length || 0
       });
       
-      // Load the JSON data into the canvas
-      canvas.loadFromJSON(jsonData, () => {
-        // Force render after loading
-        canvas.renderAll();
-        
-        setCanvasData(jsonData);
-        setSelectedObjects([]);
-      });
+      // Pre-process the objects to ensure they have proper types
+      if (parsedData.objects) {
+        parsedData.objects.forEach((obj: any) => {
+          // Log enhanced text objects for debugging
+          if (obj.type === 'enhanced-text') {
+            console.log('Found enhanced text to load:', {
+              text: obj.text,
+              padding: obj.padding,
+              borderRadius: obj.borderRadius
+            });
+          }
+        });
+      }
+      
+      // Clear the canvas before loading
+      canvas.clear();
+      
+      // Load the JSON data into the canvas with a retry mechanism
+      try {
+        canvas.loadFromJSON(parsedData, () => {
+          console.log('Canvas loaded successfully');
+          // Force render after loading
+          canvas.renderAll();
+          
+          setCanvasData(jsonData);
+          setSelectedObjects([]);
+        });
+      } catch (loadError) {
+        console.error('Error in loadFromJSON:', loadError);
+        // Try a different approach if the first one fails
+        try {
+          // Create objects manually if loadFromJSON fails
+          if (parsedData.backgroundColor) {
+            canvas.setBackgroundColor(parsedData.backgroundColor, () => {});
+          }
+          
+          // Add each object individually
+          if (parsedData.objects && Array.isArray(parsedData.objects)) {
+            parsedData.objects.forEach((obj: any) => {
+              try {
+                if (obj.type === 'image') {
+                  // Handle image objects
+                  fabric.Image.fromURL(obj.src, (img: any) => {
+                    delete obj.src;
+                    img.set(obj);
+                    canvas.add(img);
+                    canvas.renderAll();
+                  });
+                } else if (obj.type === 'enhanced-text') {
+                  // Handle enhanced text objects
+                  try {
+                    // Import the EnhancedText class
+                    const { EnhancedText } = require('../utils/enhanced-text');
+                    
+                    // Create a new EnhancedText instance
+                    const text = new EnhancedText(obj.text, {
+                      ...obj,
+                      padding: obj.padding || 0,
+                      borderRadius: obj.borderRadius || 0
+                    });
+                    
+                    canvas.add(text);
+                    canvas.renderAll();
+                    console.log('Enhanced text added manually:', text);
+                  } catch (textErr) {
+                    console.error('Error adding enhanced text:', textErr);
+                    // Fallback to regular text
+                    const text = new fabric.Text(obj.text, obj);
+                    canvas.add(text);
+                  }
+                } else {
+                  // Handle standard text objects
+                  if (obj.type === 'text' || obj.type === 'i-text') {
+                    const text = new fabric.Text(obj.text, obj);
+                    canvas.add(text);
+                  }
+                }
+                // Handle other object types as needed
+              } catch (objError) {
+                console.error('Error adding object:', objError);
+              }
+            });
+          }
+          
+          canvas.renderAll();
+        } catch (fallbackError) {
+          console.error('Fallback loading also failed:', fallbackError);
+        }
+      }
     } catch (error) {
       console.error('Error loading canvas data:', error);
     }
   }, [canvas]);
 
   // Context value
-  const value = {
+  const value: CanvasContextType = {
     canvas,
     setCanvas,
     selectedObjects,

@@ -6,6 +6,10 @@ import { TextTool } from './text-tool';
 import { RetouchrImageTool } from './retouchr-image-tool';
 import { BackgroundTool } from './background-tool';
 import { LayersTool } from './layers-tool';
+// Import new LayerPanel but keep old LayersTool for fallback
+import { LayerPanel } from '../fLayers';
+// Import TemplateToolbar component
+import { TemplateToolbar } from '../templates/components/TemplateToolbar';
 import { ExportTool } from './export-tool';
 import { useCanvas } from '../hooks/use-canvas';
 import { Separator } from '@/components/ui/separator';
@@ -15,7 +19,8 @@ import {
   Image, 
   Layers, 
   PaintBucket, 
-  Download 
+  Download,
+  LayoutTemplate 
 } from 'lucide-react';
 
 interface ToolbarProps {
@@ -30,7 +35,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   defaultCollapsed = false
 }) => {
   const [activeTool, setActiveTool] = useState<string>("text");
-  const { selectedObjects } = useCanvas();
+  const [useNewLayers, setUseNewLayers] = useState(false);
+  const { selectedObjects, canvas } = useCanvas();
+  
+  // Decide whether to use the new layer system based on a feature flag
+  // This allows easy fallback to the old system if needed
+  useEffect(() => {
+    // Enable the new fLayers implementation
+    setUseNewLayers(true);
+  }, []);
   
   // Apply default collapsed state on component mount
   useEffect(() => {
@@ -95,6 +108,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             icon={<Layers className="h-5 w-5" />} 
             title="Layers"
           />
+          
+          <ToolButton 
+            name="templates" 
+            icon={<LayoutTemplate className="h-5 w-5" />} 
+            title="Templates"
+          />
         </div>
       </div>
       
@@ -107,6 +126,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               {activeTool === 'image' && 'Image Tool'}
               {activeTool === 'background' && 'Background'}
               {activeTool === 'layers' && 'Layers'}
+              {activeTool === 'templates' && 'Templates'}
             </h2>
           </div>
           
@@ -115,7 +135,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               {activeTool === 'text' && <TextTool />}
               {activeTool === 'image' && <RetouchrImageTool />}
               {activeTool === 'background' && <BackgroundTool />}
-              {activeTool === 'layers' && <LayersTool />}
+              {activeTool === 'layers' && (
+                useNewLayers ? <LayerPanel /> : <LayersTool />
+              )}
+              {activeTool === 'templates' && <TemplateToolbar />}
             </div>
           </ScrollArea>
         </div>

@@ -57,7 +57,7 @@ export const POST = withOrganizationAuthRequired(async (req: NextRequest, contex
     const [newAsset] = await db.insert(assets).values({
       name: prompt.substring(0, 50) || 'Generated Image',
       type: 'image',
-      studioTool: 'image_editor',
+      studioTool: 'cloner', // Using cloner as the studio tool
       status: 'draft',
       thumbnail: thumbnailUrl,
       content: {

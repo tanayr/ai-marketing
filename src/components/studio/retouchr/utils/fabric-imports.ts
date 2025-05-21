@@ -18,7 +18,9 @@ if (typeof window !== 'undefined') {
       Text: class {},
       IText: class {},
       Image: class {},
-      Rect: class {}
+      Rect: class {},
+      EnhancedText: class {}, // Add our custom class
+      util: { classRegistry: { add: () => {} } } // Add util for class registration
     };
   }
 } else {
@@ -28,7 +30,9 @@ if (typeof window !== 'undefined') {
     Text: class {},
     IText: class {},
     Image: class {},
-    Rect: class {}
+    Rect: class {},
+    EnhancedText: class {}, // Add our custom class
+    util: { classRegistry: { add: () => {} } } // Add util for class registration
   };
 }
 
@@ -137,3 +141,21 @@ export type FabricIText = fabric.IText;
 export type FabricImage = fabric.Image;
 export type FabricRect = fabric.Rect;
 export type FabricIEvent = fabric.IEvent;
+
+// Make sure enhanced-text properties are properly registered with Fabric
+// This ensures the JSON serialization/deserialization will work correctly
+export function registerEnhancedTextClass() {
+  if (typeof window !== 'undefined' && fabric) {
+    console.log('Registering EnhancedText class with Fabric.js for serialization');
+    
+    // Ensure custom properties are preserved in serialization
+    if (!fabric.Text.prototype._textDerivedPropertiesForSerialization) {
+      fabric.Text.prototype._textDerivedPropertiesForSerialization = [];
+    }
+    
+    // Add our custom properties if not already present
+    if (!fabric.Text.prototype._textDerivedPropertiesForSerialization.includes('padding')) {
+      fabric.Text.prototype._textDerivedPropertiesForSerialization.push('padding', 'borderRadius');
+    }
+  }
+}
