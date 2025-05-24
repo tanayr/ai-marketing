@@ -21,6 +21,8 @@ import { RetouchrAsset } from './types';
 import { TextFormattingProvider } from './text-editing/TextFormattingContext';
 import { AdvancedTextProvider } from './text-editing/AdvancedTextContext';
 import { FloatingTextToolbar } from './text-editing/FloatingTextToolbar';
+import { RetouchrAIChat } from './ai-chat/RetouchrAIChat';
+// import { ToolTestingPanel } from '../../debug/ToolTestingPanel';
 
 interface RetouchrStudioProps {
   assetId?: string;
@@ -58,6 +60,16 @@ export const RetouchrStudio: React.FC<RetouchrStudioProps> = ({
         <AdvancedTextProvider>
           <FloatingTextToolbar />
         </AdvancedTextProvider>
+        {/* AI Chat Assistant */}
+        <RetouchrAIChat 
+          designId={assetId || 'new-design'} 
+          organizationId="default-org" 
+        />
+        
+        {/* Tool Testing Panel */}
+        {/* <div className="fixed bottom-4 right-4 z-50">
+          <ToolTestingPanel />  
+        </div> */}
       </TextFormattingProvider>
     </CanvasProvider>
   );

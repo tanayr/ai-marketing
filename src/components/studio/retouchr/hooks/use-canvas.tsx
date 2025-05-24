@@ -27,6 +27,9 @@ export interface CanvasContextType {
 // Create context with default values
 const CanvasContext = createContext<CanvasContextType | null>(null);
 
+// Export context for use in other components
+export { CanvasContext };
+
 // Provider component
 export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   // Canvas state
