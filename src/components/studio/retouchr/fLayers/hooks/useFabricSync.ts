@@ -3,7 +3,7 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { fabric } from '../../utils/fabric-imports';
 import { LayerItem, ObjectLayerItem, GroupLayerItem } from '../core/types';
-import { getLayerName } from '../core/utils';
+import { getLayerName, validateLayerStructure } from '../core/utils';
 
 /**
  * Hook to synchronize fabric.js canvas with layer state
@@ -133,7 +133,6 @@ export function useFabricSync(
         updateTimeoutRef.current = setTimeout(() => {
           try {
             if (!canvas || typeof canvas.getObjects !== 'function') {
-              console.log('Canvas not ready for update');
               return;
             }
             
@@ -141,14 +140,11 @@ export function useFabricSync(
             
             // Skip update if there are no objects to avoid unnecessary renders
             if (!objects || !Array.isArray(objects) || objects.length === 0) {
-              console.log('No canvas objects to process');
-              // Still update with empty array to keep UI in sync
-              setLayers([]);
               return;
             }
             
             const processedLayers = processCanvasObjects(objects, groups);
-            setLayers(processedLayers);
+            setLayers(validateLayerStructure(processedLayers));
           } catch (err) {
             console.error('Error in delayed canvas update:', err);
           }
@@ -162,31 +158,27 @@ export function useFabricSync(
     // Add listeners to a specific text object
     const addTextListener = (obj: any) => {
       // Only add listeners to text objects and avoid duplicates
-      if (!obj || obj.type !== 'text' || !obj.id) return;
+      if (!obj || (!obj.type || (obj.type !== 'text' && obj.type !== 'i-text' && obj.type !== 'enhanced-text')) || !obj.id) return;
       
       // Skip if we already have a listener for this object
       if (newListeners.has(obj.id)) return;
-      
-      console.log('Adding text change listener to:', obj.id, obj.text);
       
       // Mark we've added a listener
       newListeners.add(obj.id);
       
       // Listen for direct text changes
       if (typeof obj.on === 'function') {
-        // Listen for the main change event
         obj.on('changed', function() {
-          console.log('Text changed event:', obj.id, obj.text);
+          // Force immediate update for text changes to update layer names
           updateFromCanvas();
         });
         
-        // Also listen for text modifications via the editing interface
-        obj.on('editing:entered', function() {
-          console.log('Text editing started:', obj.id);
+        obj.on('editing:exited', function() {
+          // Force immediate update when editing finishes
+          updateFromCanvas();
         });
         
-        obj.on('editing:exited', function() {
-          console.log('Text editing finished:', obj.id, obj.text);
+        obj.on('modified', function() {
           updateFromCanvas();
         });
       }
@@ -195,14 +187,13 @@ export function useFabricSync(
     // Add listeners to all existing text objects
     try {
       if (!canvas || typeof canvas.getObjects !== 'function') {
-        console.log('Canvas not ready for adding text listeners');
         return updateFromCanvas;
       }
       
       const objects = canvas.getObjects();
       if (objects && Array.isArray(objects)) {
         objects.forEach(obj => {
-          if (obj && obj.type === 'text') {
+          if (obj && (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'enhanced-text')) {
             addTextListener(obj);
           }
         });
@@ -320,7 +311,6 @@ export function useFabricSync(
       // Skip if we already have a listener for this object
       if (newListeners.has(textObj.id)) return;
       
-      console.log('Adding text change listener to:', textObj.id, textObj.text);
       newListeners.add(textObj.id);
       
       // Listen for direct text changes
@@ -421,14 +411,12 @@ export function useFabricSync(
     try {
       // Make sure canvas is ready
       if (typeof canvas.getObjects !== 'function') {
-        console.log('Canvas not ready for selection');
         return;
       }
       
       // Get all objects on the canvas
       const objects = canvas.getObjects();
       if (!objects || !Array.isArray(objects)) {
-        console.log('Invalid objects array from canvas');
         return;
       }
       

@@ -32,10 +32,10 @@ export const updateActiveTextObject = (
   if (!canvas) return;
   const activeObject = canvas.getActiveObject();
 
-  if (activeObject && (activeObject.type === 'text' || activeObject.type === 'i-text')) {
+  if (activeObject && (activeObject.type === 'text' || activeObject.type === 'i-text' || activeObject.type === 'enhanced-text')) {
     // Cast to any to set potentially custom properties like borderRadius
     // or use activeObject.set(updates as any) if FabricIText is strict
-    (activeObject as FabricIText).set(updates as any);
+    (activeObject as any).set(updates as any);
     canvas.renderAll();
   }
 };
@@ -80,8 +80,8 @@ export const getActiveTextObjectProperties = (
   if (!canvas) return null;
   const activeObject = canvas.getActiveObject();
 
-  if (activeObject && (activeObject.type === 'text' || activeObject.type === 'i-text')) {
-    const textObj = activeObject as FabricIText;
+  if (activeObject && (activeObject.type === 'text' || activeObject.type === 'i-text' || activeObject.type === 'enhanced-text')) {
+    const textObj = activeObject as any; // Cast to any to access all text properties
     return {
       text: textObj.text || '',
       fontFamily: textObj.fontFamily,
@@ -94,8 +94,8 @@ export const getActiveTextObjectProperties = (
       lineHeight: textObj.lineHeight,
       charSpacing: textObj.charSpacing, // This is the Fabric.js value
       textAlign: textObj.textAlign as 'left' | 'center' | 'right' | 'justify',
-      padding: (textObj as any).padding, // Cast if padding is not a standard IText property
-      borderRadius: (textObj as any).borderRadius, // Cast for custom property
+      padding: textObj.padding, // Cast if padding is not a standard IText property
+      borderRadius: textObj.borderRadius, // Cast for custom property
     };
   }
   return null;

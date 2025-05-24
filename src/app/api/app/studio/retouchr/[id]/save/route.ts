@@ -8,6 +8,7 @@ import { z } from "zod";
 // Validation schema for saving a design
 const saveDesignSchema = z.object({
   canvasJSON: z.string(),
+  layerGroups: z.array(z.any()).optional(), // Add layer groups support
   createVersion: z.boolean().default(false),
   versionNotes: z.string().optional(),
 });
@@ -84,6 +85,7 @@ export const POST = withOrganizationAuthRequired(async (req, context) => {
       ...design.content,
       version: (design.content?.version || 0) + 1,
       fabricCanvas: canvasData,
+      layerGroups: validData.layerGroups || [], // Include layer groups
       retouchr: {
         ...design.content?.retouchr,
         lastSavedBy: user.id,

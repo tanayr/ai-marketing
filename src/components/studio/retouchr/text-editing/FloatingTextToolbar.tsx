@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useCanvas } from '../hooks/use-canvas';
 import { useTextFormatting } from './TextFormattingContext';
 import { Portal } from './Portal';
@@ -17,12 +17,14 @@ import {
   Separator
 } from './toolbar';
 
+// Import advanced effects panel
+import { AdvancedEffectsPanel } from './AdvancedEffectsPanel';
+
 // Icons
-import { Palette } from 'lucide-react';
+import { Type } from 'lucide-react';
 
 /**
- * Floating toolbar that appears fixed at the top of the page when a text object is selected
- * Using modular components for better maintainability and reduced file size
+ * Clean, simplified floating toolbar focused on core text editing
  */
 export const FloatingTextToolbar: React.FC = () => {
   const { canvas, selectedObjects } = useCanvas();
@@ -47,7 +49,6 @@ export const FloatingTextToolbar: React.FC = () => {
 
   // Create wrapper for updateTextProperty to fix TypeScript compatibility
   const updateTextPropertyWrapper = (property: string, value: any) => {
-    // Cast the property to keyof FabricTextProperties to satisfy TypeScript
     updateTextProperty(property as any, value);
   };
   
@@ -66,7 +67,7 @@ export const FloatingTextToolbar: React.FC = () => {
           position: 'fixed',
           left: '50%', 
           top: '5px',
-          transform: 'translateX(-50%)', // Center horizontally
+          transform: 'translateX(-50%)',
           maxWidth: '96vw',
           overflowX: 'auto',
           scrollbarWidth: 'thin',
@@ -74,38 +75,36 @@ export const FloatingTextToolbar: React.FC = () => {
           padding: '4px 8px'
         }}
       >
-        {/* Font family selector */}
+        {/* Font Selection */}
         <FontSelector {...toolbarProps} />
         <Separator />
-        
-        {/* Text color */}
-        <ColorControl 
-          {...toolbarProps} 
-          property="fill" 
-          allowTransparent={false} 
-        />
-        <Separator />
-        
-        {/* Text formatting controls (bold, italic, underline) */}
+
+        {/* Text Formatting */}
         <TextFormattingControls {...toolbarProps} />
         <Separator />
-        
-        {/* Text alignment */}
+
+        {/* Text Color */}
+        <ColorControl {...toolbarProps} property="fill" allowTransparent={false} />
+        <Separator />
+
+        {/* Alignment */}
         <AlignmentControls {...toolbarProps} />
         <Separator />
-        
-        {/* Text case & presets */}
-        <div className="flex items-center gap-1">
-          <TextCaseControl {...toolbarProps} />
-          <TextPresetsControl 
-            {...toolbarProps} 
-            applyTextPreset={applyTextPreset} 
-          />
-        </div>
+
+        {/* Text Case */}
+        <TextCaseControl {...toolbarProps} />
         <Separator />
-        
-        {/* Combined style controls for background, padding, border radius and line height */}
+
+        {/* Style Controls (Background, Padding, Border Radius) */}
         <StyleControls {...toolbarProps} />
+        <Separator />
+
+        {/* Advanced Effects Panel */}
+        <AdvancedEffectsPanel />
+        <Separator />
+
+        {/* Text Presets */}
+        <TextPresetsControl {...toolbarProps} applyTextPreset={applyTextPreset} />
       </div>
     </Portal>
   );

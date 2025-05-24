@@ -74,11 +74,11 @@ export class EnhancedText extends (fabric.IText as any) {
   }
 
   /**
-   * Override the _render method to add padding and border radius
+   * Override the _render method to handle padding and border radius
    */
   _render(ctx: CanvasRenderingContext2D) {
-    // If we have padding or border radius, draw the background with these features
-    if ((this.padding > 0 || this.borderRadius > 0) && this.backgroundColor) {
+    // Check if we need custom rendering for padding or borderRadius
+    if (this.padding > 0 || this.borderRadius > 0) {
       // Save the current context
       ctx.save();
 
@@ -88,10 +88,35 @@ export class EnhancedText extends (fabric.IText as any) {
       const left = -this.width / 2 - this.padding;
       const top = -this.height / 2 - this.padding;
 
-      // Draw the background with rounded corners if borderRadius is set
-      ctx.beginPath();
+      // Draw the background first if backgroundColor is set
+      if (this.backgroundColor && this.backgroundColor !== '' && this.backgroundColor !== 'transparent') {
+        ctx.beginPath();
+        if (this.borderRadius > 0) {
+          // Draw rounded rectangle
+          const radius = Math.min(this.borderRadius, Math.min(width, height) / 2);
+          ctx.moveTo(left + radius, top);
+          ctx.lineTo(left + width - radius, top);
+          ctx.arcTo(left + width, top, left + width, top + radius, radius);
+          ctx.lineTo(left + width, top + height - radius);
+          ctx.arcTo(left + width, top + height, left + width - radius, top + height, radius);
+          ctx.lineTo(left + radius, top + height);
+          ctx.arcTo(left, top + height, left, top + height - radius, radius);
+          ctx.lineTo(left, top + radius);
+          ctx.arcTo(left, top, left + radius, top, radius);
+          ctx.closePath();
+        } else {
+          // Draw rectangle without rounded corners
+          ctx.rect(left, top, width, height);
+        }
+
+        // Fill the background
+        ctx.fillStyle = this.backgroundColor;
+        ctx.fill();
+      }
+
+      // Create clipping path for rounded corners if needed
       if (this.borderRadius > 0) {
-        // Draw rounded rectangle
+        ctx.beginPath();
         const radius = Math.min(this.borderRadius, Math.min(width, height) / 2);
         ctx.moveTo(left + radius, top);
         ctx.lineTo(left + width - radius, top);
@@ -103,21 +128,28 @@ export class EnhancedText extends (fabric.IText as any) {
         ctx.lineTo(left, top + radius);
         ctx.arcTo(left, top, left + radius, top, radius);
         ctx.closePath();
-      } else {
-        // Draw rectangle without rounded corners
-        ctx.rect(left, top, width, height);
+        
+        // Set clipping region for text
+        ctx.clip();
       }
 
-      // Fill the background
-      ctx.fillStyle = this.backgroundColor;
-      ctx.fill();
+      // Temporarily disable backgroundColor to prevent double rendering
+      const originalBgColor = this.backgroundColor;
+      this.backgroundColor = '';
 
-      // Restore the context before drawing the text
+      // Call individual rendering methods to avoid default background
+      this._renderTextDecoration(ctx);
+      this._renderText(ctx);
+
+      // Restore backgroundColor
+      this.backgroundColor = originalBgColor;
+
+      // Restore the context
       ctx.restore();
+    } else {
+      // Use standard rendering when no padding or borderRadius
+      super._render(ctx);
     }
-
-    // Call the original render method to draw the text
-    super._render(ctx);
   }
 
   /**
@@ -143,9 +175,8 @@ export class EnhancedText extends (fabric.IText as any) {
    * only when we're handling it ourselves in _render
    */
   _renderTextLinesBackground(ctx: CanvasRenderingContext2D) {
-    // Only skip standard background rendering when we're handling it in _render 
-    // (when both padding/borderRadius AND backgroundColor exist)
-    if ((this.padding > 0 || this.borderRadius > 0) && this.backgroundColor) {
+    // Skip standard background rendering when we have custom rendering (padding or borderRadius)
+    if (this.padding > 0 || this.borderRadius > 0) {
       // Skip the background rendering as we've done it in _render
       return;
     }
@@ -171,8 +202,8 @@ export class EnhancedText extends (fabric.IText as any) {
   }
   
   /**
-   * Forces a complete refresh of the object by applying a micro-scale
-   * This helps ensure the object is properly re-rendered after property changes
+   * Refresh method to force re-render when properties change
+   * Uses micro-scaling to ensure proper redraw
    */
   _refreshObject() {
     // Store current scale values
@@ -187,10 +218,23 @@ export class EnhancedText extends (fabric.IText as any) {
     this.dirty = true;
     this.setCoords();
     
-    // Force cache regeneration
+    // Force cache regeneration if available
     if (typeof this.setCacheAsDirty === 'function') {
       this.setCacheAsDirty();
     }
+    
+    if (this.canvas) {
+      this.canvas.renderAll();
+    }
+    
+    // Reset to original scale after a brief delay
+    setTimeout(() => {
+      this.set('scaleX', currentScaleX);
+      this.set('scaleY', currentScaleY);
+      if (this.canvas) {
+        this.canvas.renderAll();
+      }
+    }, 1);
     
     return this;
   }

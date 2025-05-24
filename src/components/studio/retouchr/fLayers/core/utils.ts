@@ -106,38 +106,44 @@ export function getLayerName(obj: any, index: number): string {
   // Check if object exists
   if (!obj) return `Layer ${index + 1}`;
   
-  // Handle text layers
-  if (obj.type === 'text') {
+  // Handle all text layer types (text, i-text, enhanced-text)
+  if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'enhanced-text') {
     // Try multiple ways to access the text content
     let textContent = '';
     
     // Approach 1: Direct text property
-    if (typeof obj.text === 'string') {
+    if (typeof obj.text === 'string' && obj.text.trim()) {
       textContent = obj.text;
     }
-    // Approach 2: Via get method (fabric method)
-    else if (obj.get && typeof obj.get === 'function') {
+    
+    // Approach 2: Via get method (fabric method) - only if we don't have content yet
+    if (!textContent && obj.get && typeof obj.get === 'function') {
       try {
         const content = obj.get('text');
-        if (typeof content === 'string') {
+        if (typeof content === 'string' && content.trim()) {
           textContent = content;
         }
       } catch (e) {
         // Ignore errors from get
       }
     }
+    
     // Approach 3: Check _textLines array (internal fabric property)
-    else if (obj._textLines && Array.isArray(obj._textLines) && obj._textLines.length > 0) {
-      textContent = obj._textLines.join(' ');
+    if (!textContent && obj._textLines && Array.isArray(obj._textLines) && obj._textLines.length > 0) {
+      const joinedText = obj._textLines.join(' ').trim();
+      if (joinedText) {
+        textContent = joinedText;
+      }
     }
+    
     // Approach 4: Check _text property (another internal fabric property)
-    else if (obj._text && typeof obj._text === 'string') {
+    if (!textContent && obj._text && typeof obj._text === 'string' && obj._text.trim()) {
       textContent = obj._text;
     }
     
-    // Fallback
+    // Fallback: Return a default name based on the text type
     if (!textContent.trim()) {
-      return 'Text';
+      return obj.type === 'enhanced-text' ? 'Enhanced Text' : 'Text';
     }
     
     // Truncate if too long
@@ -146,8 +152,42 @@ export function getLayerName(obj: any, index: number): string {
   
   // Handle image layers
   if (obj.type === 'image') {
-    const src = obj.src || (obj._element && obj._element.src) || '';
-    return extractFilename(src);
+    // Try multiple ways to get the image source
+    let src = '';
+    
+    // Approach 1: Direct src property
+    if (obj.src) {
+      src = obj.src;
+    }
+    // Approach 2: Element src
+    else if (obj._element && obj._element.src) {
+      src = obj._element.src;
+    }
+    // Approach 3: Via get method
+    else if (obj.get && typeof obj.get === 'function') {
+      try {
+        const srcFromGet = obj.get('src');
+        if (srcFromGet) src = srcFromGet;
+      } catch (e) {
+        // Ignore errors from get
+      }
+    }
+    // Approach 4: Check originalSrc
+    else if (obj.originalSrc) {
+      src = obj.originalSrc;
+    }
+    
+    if (src) {
+      return extractFilename(src);
+    }
+    
+    // If no src found, check if object has a name property
+    if (obj.name && typeof obj.name === 'string') {
+      return obj.name;
+    }
+    
+    // Final fallback
+    return `Image ${index + 1}`;
   }
   
   // Handle other types
@@ -267,4 +307,56 @@ export function moveLayerDown(layers: LayerItem[], id: string): LayerItem[] {
     }
     return layer;
   });
+}
+
+/**
+ * Remove duplicate layers based on their ID
+ */
+export function deduplicateLayers(layers: LayerItem[]): LayerItem[] {
+  const seenIds = new Set<string>();
+  
+  const deduplicate = (layerList: LayerItem[]): LayerItem[] => {
+    return layerList.filter(layer => {
+      if (seenIds.has(layer.id)) {
+        console.warn(`Duplicate layer found with ID: ${layer.id}, removing duplicate`);
+        return false;
+      }
+      
+      seenIds.add(layer.id);
+      
+      // Recursively deduplicate children if it's a group
+      if (layer.isGroup) {
+        layer = {
+          ...layer,
+          children: deduplicate(layer.children)
+        } as GroupLayerItem;
+      }
+      
+      return true;
+    });
+  };
+  
+  return deduplicate([...layers]);
+}
+
+/**
+ * Validate layer structure and fix common issues
+ */
+export function validateLayerStructure(layers: LayerItem[]): LayerItem[] {
+  const validated = deduplicateLayers(layers);
+  
+  // Remove empty groups
+  const removeEmptyGroups = (layerList: LayerItem[]): LayerItem[] => {
+    return layerList.filter(layer => {
+      if (layer.isGroup) {
+        const groupLayer = layer as GroupLayerItem;
+        groupLayer.children = removeEmptyGroups(groupLayer.children);
+        // Keep groups with children
+        return groupLayer.children.length > 0;
+      }
+      return true;
+    });
+  };
+  
+  return removeEmptyGroups(validated);
 }

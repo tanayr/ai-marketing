@@ -54,21 +54,27 @@ export const RetouchrImageTool: React.FC = () => {
       const file = files[0];
       const dataUrl = await fileToDataUrl(file);
       
-      // Save to local storage
-      const savedImage = saveImageToLocalStorage(dataUrl, file.name);
+      // Show loading toast for large images
+      const toastId = toast.loading("Processing image...");
+      
+      // Save to storage (local or memory fallback)
+      const savedImage = await saveImageToLocalStorage(dataUrl, file.name);
       
       // Add to canvas
-      addImageToCanvas(dataUrl);
+      addImageToCanvas(savedImage.dataUrl);
       
       // Refresh images list
       loadLocalImages();
       
+      toast.dismiss(toastId);
       toast.success("Image added", {
         description: "Image has been added to your canvas"
       });
     } catch (error) {
       console.error("Error processing image:", error);
-      toast.error("Failed to process image");
+      toast.error("Failed to process image", {
+        description: error instanceof Error ? error.message : "Unknown error"
+      });
     } finally {
       setUploadingFile(false);
       // Reset the input
@@ -86,7 +92,7 @@ export const RetouchrImageTool: React.FC = () => {
     const tempImg = new Image();
     tempImg.crossOrigin = "anonymous";
     
-    tempImg.onload = () => {
+    tempImg.onload = async () => {
       try {
         // Convert to canvas to get data URL (to avoid CORS issues)
         const tempCanvas = document.createElement('canvas');
@@ -101,11 +107,11 @@ export const RetouchrImageTool: React.FC = () => {
         ctx.drawImage(tempImg, 0, 0);
         const dataUrl = tempCanvas.toDataURL('image/png');
         
-        // Save locally
-        saveImageToLocalStorage(dataUrl, "URL Image");
+        // Save locally (with async handling)
+        const savedImage = await saveImageToLocalStorage(dataUrl, "URL Image");
         
         // Add to canvas
-        addImageToCanvas(dataUrl);
+        addImageToCanvas(savedImage.dataUrl);
         
         // Refresh local images
         loadLocalImages();

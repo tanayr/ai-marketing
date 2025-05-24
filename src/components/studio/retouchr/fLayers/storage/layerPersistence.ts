@@ -116,3 +116,16 @@ export function generateCanvasHash(canvasData: string): string {
   
   return hash;
 }
+
+/**
+ * Get current layer groups for the given canvas
+ * This function is used when saving design data to include layer groups
+ * @param canvasId Unique identifier for the canvas
+ * @returns Current layer groups for this canvas
+ */
+export function getCurrentLayerGroups(canvasId?: string): GroupLayerItem[] {
+  if (canvasId) {
+    return loadLayerGroupsForCanvas(canvasId);
+  }
+  return loadLayerGroups();
+}

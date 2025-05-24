@@ -1,7 +1,16 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useCanvas } from '../../hooks/use-canvas';
 import { LayerGroup } from './LayerGroup';
 import { LayerControls } from './LayerControls';
@@ -97,10 +106,11 @@ export const LayerPanel: React.FC = () => {
     }
   }, [layers, getAllGroups, canvasHash, initialGroupsLoadedRef]);
   
-  // Use the useFabricSync hook only once (not conditionally)
-  // Pass the stable groupsRef.current to avoid re-renders
+  // Use the useFabricSync hook only when canvas is ready AND groups are loaded
+  // This prevents the hook from resetting layers before groups are loaded
+  const shouldSyncFabric = canvasReady && initialGroupsLoadedRef.current;
   const { selectLayerOnCanvas } = useFabricSync(
-    canvasReady ? canvas : null,
+    shouldSyncFabric ? canvas : null,
     setLayers,
     groupsRef.current
   );
@@ -136,10 +146,13 @@ export const LayerPanel: React.FC = () => {
         console.log('Loaded general groups:', generalGroups);
         loadedGroupsRef.current = generalGroups;
         initializeWithGroups(generalGroups);
+      } else {
+        console.log('No saved groups found - proceeding with empty groups');
       }
     }
     
-    // Mark that we've loaded groups
+    // Mark that we've completed the loading attempt (even if no groups found)
+    // This allows useFabricSync to proceed
     initialGroupsLoadedRef.current = true;
   }, [canvasHash, canvasReady, initializeWithGroups]);
   
@@ -295,6 +308,76 @@ export const LayerPanel: React.FC = () => {
     ungroup(selectedId);
   };
   
+  // Enhanced move layer up with canvas sync
+  const handleMoveLayerUp = (layerId: string) => {
+    if (!canvas || !canvasReady) return;
+    
+    // Update UI layer order
+    moveLayerUp(layerId);
+    
+    // Sync with canvas object order
+    syncLayerOrderToCanvas(layerId, 'up');
+  };
+  
+  // Enhanced move layer down with canvas sync
+  const handleMoveLayerDown = (layerId: string) => {
+    if (!canvas || !canvasReady) return;
+    
+    // Update UI layer order
+    moveLayerDown(layerId);
+    
+    // Sync with canvas object order
+    syncLayerOrderToCanvas(layerId, 'down');
+  };
+  
+  // Sync layer order to canvas
+  const syncLayerOrderToCanvas = (layerId: string, direction: 'up' | 'down') => {
+    if (!canvas) return;
+    
+    try {
+      const fabricCanvas = canvas as any; // Cast to access fabric.js methods
+      const objects = fabricCanvas.getObjects();
+      const objectIndex = objects.findIndex((obj: any) => obj.id === layerId);
+      
+      if (objectIndex === -1) return;
+      
+      const targetObject = objects[objectIndex];
+      
+      if (direction === 'up' && objectIndex < objects.length - 1) {
+        // Move object up in z-order (bringForward)
+        fabricCanvas.bringForward(targetObject);
+      } else if (direction === 'down' && objectIndex > 0) {
+        // Move object down in z-order (sendBackwards)
+        fabricCanvas.sendBackwards(targetObject);
+      }
+      
+      fabricCanvas.renderAll();
+    } catch (error) {
+      console.error('Error syncing layer order to canvas:', error);
+    }
+  };
+  
+  // Enhanced delete with canvas sync
+  const handleDeleteLayer = (layerId: string) => {
+    if (!canvas || !canvasReady) return;
+    
+    try {
+      // Find and remove the object from canvas
+      const objects = canvas.getObjects();
+      const objectToDelete = objects.find(obj => obj.id === layerId);
+      
+      if (objectToDelete) {
+        canvas.remove(objectToDelete);
+        canvas.renderAll();
+      }
+      
+      // Update UI layer state
+      deleteLayer(layerId);
+    } catch (error) {
+      console.error('Error deleting layer:', error);
+    }
+  };
+  
   // For debugging
   const isEmptyState = !layers || layers.length === 0;
   
@@ -332,17 +415,47 @@ export const LayerPanel: React.FC = () => {
             onToggleVisibility={toggleVisibility}
             onRename={renameLayer}
             onToggleExpand={toggleExpand}
-            onMoveUp={moveLayerUp}
-            onMoveDown={moveLayerDown}
-            onDelete={deleteLayer}
+            onMoveUp={handleMoveLayerUp}
+            onMoveDown={handleMoveLayerDown}
+            onDelete={handleDeleteLayer}
           />
         </div>
       </ScrollArea>
     );
   };
   
+  // Add state for delete confirmation dialog
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [layerToDelete, setLayerToDelete] = useState<string | null>(null);
+  
+  // Handle the actual deletion
+  const handleConfirmDelete = () => {
+    if (selectedId) {
+      handleDeleteLayer(selectedId);
+      setShowDeleteDialog(false);
+      setLayerToDelete(null);
+    }
+  };
+  
+  const handleCancelDelete = () => {
+    setShowDeleteDialog(false);
+    setLayerToDelete(null);
+  };
+  
+  // Get the layer to be deleted for the dialog
+  const layerToDeleteInfo = selectedId ? selectedLayer() : null;
+  
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Delete' && selectedId) {
+      event.preventDefault();
+      event.stopPropagation();
+      setShowDeleteDialog(true);
+      setLayerToDelete(selectedId);
+    }
+  }, [selectedId]);
+  
   return (
-    <div className="layers-panel">
+    <div className="layers-panel" onKeyDown={handleKeyDown} tabIndex={0}>
       <h3 className="text-xs font-medium mb-2">Layers</h3>
       
       <LayerControls
@@ -353,6 +466,25 @@ export const LayerPanel: React.FC = () => {
       />
       
       {renderLayerContent()}
+      
+      {showDeleteDialog && (
+        <Dialog open={showDeleteDialog} onOpenChange={(open) => !open && handleCancelDelete()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Layer</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete layer "{layerToDeleteInfo?.name}"?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={handleCancelDelete} variant="outline">Cancel</Button>
+              <Button onClick={handleConfirmDelete} variant="destructive">
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

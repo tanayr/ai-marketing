@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CanvasProvider, useCanvas } from './hooks/use-canvas';
 import { fabric, FabricCanvas, registerEnhancedTextClass } from './utils/fabric-imports';
+import { getCurrentLayerGroups, generateCanvasHash } from './fLayers/storage/layerPersistence';
 
 // Register EnhancedText class for proper serialization
 if (typeof window !== 'undefined') {
@@ -18,6 +19,7 @@ import { toast } from 'sonner';
 import { RetouchrAsset } from './types';
 // Import text editing components
 import { TextFormattingProvider } from './text-editing/TextFormattingContext';
+import { AdvancedTextProvider } from './text-editing/AdvancedTextContext';
 import { FloatingTextToolbar } from './text-editing/FloatingTextToolbar';
 
 interface RetouchrStudioProps {
@@ -53,7 +55,9 @@ export const RetouchrStudio: React.FC<RetouchrStudioProps> = ({
           onNewDesign={onNewDesign}
         />
         {/* Floating text toolbar will appear when text is selected */}
-        <FloatingTextToolbar />
+        <AdvancedTextProvider>
+          <FloatingTextToolbar />
+        </AdvancedTextProvider>
       </TextFormattingProvider>
     </CanvasProvider>
   );
@@ -209,13 +213,19 @@ const RetouchrStudioContent: React.FC<RetouchrStudioProps> = ({
       // Save the canvas (will include any background image)
       const canvasJSON = saveCanvas();
       
+      // Get current layer groups
+      const canvasHash = generateCanvasHash(canvasJSON);
+      const layerGroups = getCurrentLayerGroups(canvasHash);
+      
       // Log the canvas JSON being saved (frontend)
       console.log('FRONTEND: Saving canvas JSON:', canvasJSON);
+      console.log('FRONTEND: Including layer groups:', layerGroups.length);
       console.log('FRONTEND: JSON preview:', JSON.parse(canvasJSON));
       
       // Send to server
       const result = await onSave({
         canvasJSON,
+        layerGroups,
         createVersion: true,
       });
       

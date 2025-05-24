@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { saveLayerGroupsForCanvas, generateCanvasHash } from '@/components/studio/retouchr/fLayers/storage/layerPersistence';
 
 // CSS override to remove padding and width restrictions on parent containers
 const removeParentPadding = `
@@ -86,6 +87,17 @@ export default function RetouchrStudioPage() {
         console.log('Design data loaded:', data);
         console.log('Design content:', data?.content);
         console.log('Has fabricCanvas?', !!data?.content?.fabricCanvas);
+        
+        // Restore layer groups if they exist in the design
+        if (data?.content?.layerGroups && Array.isArray(data.content.layerGroups)) {
+          console.log('Restoring layer groups:', data.content.layerGroups.length);
+          
+          // Generate canvas hash and save groups to localStorage for layer panel
+          if (data.content.fabricCanvas) {
+            const canvasHash = generateCanvasHash(JSON.stringify(data.content.fabricCanvas));
+            saveLayerGroupsForCanvas(canvasHash, data.content.layerGroups);
+          }
+        }
         
         setDesignData(data);
       } catch (error) {
