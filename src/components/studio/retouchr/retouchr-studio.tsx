@@ -2,12 +2,13 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { CanvasProvider, useCanvas } from './hooks/use-canvas';
-import { fabric, FabricCanvas, registerEnhancedTextClass } from './utils/fabric-imports';
+import { fabric, FabricCanvas } from './utils/fabric-imports';
 import { getCurrentLayerGroups, generateCanvasHash } from './fLayers/storage/layerPersistence';
+import { initializeFabric } from './utils/initialize-fabric';
 
-// Register EnhancedText class for proper serialization
+// Initialize fabric extensions (including enhanced IText features)
 if (typeof window !== 'undefined') {
-  registerEnhancedTextClass();
+  initializeFabric();
 }
 import { FabricCanvas as FabricCanvasComponent } from './core/fabric-canvas';
 import { Toolbar } from './toolbar/toolbar';
@@ -20,9 +21,10 @@ import { RetouchrAsset } from './types';
 // Import text editing components
 import { TextFormattingProvider } from './text-editing/TextFormattingContext';
 import { AdvancedTextProvider } from './text-editing/AdvancedTextContext';
-import { FloatingTextToolbar } from './text-editing/FloatingTextToolbar';
+import { UnifiedFloatingTextbar } from './text-editing/UnifiedFloatingTextbar';
+import { UnifiedTextProvider } from './text-editing/UnifiedTextContext';
 import { RetouchrAIChat } from './ai-chat/RetouchrAIChat';
-// import { ToolTestingPanel } from '../../debug/ToolTestingPanel';
+import { ToolDebugContainer } from './debug/ToolDebugContainer';
 
 interface RetouchrStudioProps {
   assetId?: string;
@@ -32,6 +34,7 @@ interface RetouchrStudioProps {
   designName?: string;
   lastUpdated?: string;
   onNewDesign?: () => void;
+  onBrowseInspirations?: () => void;
 }
 
 // Main Studio wrapper component
@@ -43,6 +46,7 @@ export const RetouchrStudio: React.FC<RetouchrStudioProps> = ({
   designName,
   lastUpdated,
   onNewDesign,
+  onBrowseInspirations,
 }) => {
   return (
     <CanvasProvider>
@@ -55,21 +59,21 @@ export const RetouchrStudio: React.FC<RetouchrStudioProps> = ({
           designName={designName}
           lastUpdated={lastUpdated}
           onNewDesign={onNewDesign}
+          onBrowseInspirations={onBrowseInspirations}
         />
-        {/* Floating text toolbar will appear when text is selected */}
-        <AdvancedTextProvider>
-          <FloatingTextToolbar />
-        </AdvancedTextProvider>
+        {/* Unified text interface for enhanced fabric.IText objects */}
+        <UnifiedTextProvider>
+          {/* Unified Floating Text Toolbar will appear when text is selected */}
+          <UnifiedFloatingTextbar />
+        </UnifiedTextProvider>
         {/* AI Chat Assistant */}
         <RetouchrAIChat 
           designId={assetId || 'new-design'} 
           organizationId="default-org" 
         />
         
-        {/* Tool Testing Panel */}
-        {/* <div className="fixed bottom-4 right-4 z-50">
-          <ToolTestingPanel />  
-        </div> */}
+        {/* Tool Debug Panel */}
+        <ToolDebugContainer />
       </TextFormattingProvider>
     </CanvasProvider>
   );
@@ -84,6 +88,7 @@ const RetouchrStudioContent: React.FC<RetouchrStudioProps> = ({
   designName,
   lastUpdated,
   onNewDesign,
+  onBrowseInspirations,
 }) => {
   const { 
     canvas, 
@@ -386,6 +391,18 @@ const RetouchrStudioContent: React.FC<RetouchrStudioProps> = ({
             <File className="h-4 w-4 mr-1" />
             New
           </Button>
+          
+          {onBrowseInspirations && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 px-2 text-xs" 
+              onClick={onBrowseInspirations}
+            >
+              <span className="mr-1">✨</span>
+              Inspirations
+            </Button>
+          )}
           
           <Button
             onClick={handleSave}

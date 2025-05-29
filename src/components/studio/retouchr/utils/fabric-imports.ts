@@ -142,20 +142,40 @@ export type FabricImage = fabric.Image;
 export type FabricRect = fabric.Rect;
 export type FabricIEvent = fabric.IEvent;
 
-// Make sure enhanced-text properties are properly registered with Fabric
+// Register all enhanced text properties with Fabric
 // This ensures the JSON serialization/deserialization will work correctly
-export function registerEnhancedTextClass() {
+export function registerEnhancedTextProperties() {
   if (typeof window !== 'undefined' && fabric) {
-    console.log('Registering EnhancedText class with Fabric.js for serialization');
+    console.log('Registering enhanced text properties with Fabric.js for serialization');
     
-    // Ensure custom properties are preserved in serialization
+    // Register properties for standard Text objects
     if (!fabric.Text.prototype._textDerivedPropertiesForSerialization) {
       fabric.Text.prototype._textDerivedPropertiesForSerialization = [];
     }
     
-    // Add our custom properties if not already present
-    if (!fabric.Text.prototype._textDerivedPropertiesForSerialization.includes('padding')) {
-      fabric.Text.prototype._textDerivedPropertiesForSerialization.push('padding', 'borderRadius');
+    // Add custom properties for Text if not already present
+    const textProperties = ['padding', 'borderRadius'];
+    for (const prop of textProperties) {
+      if (!fabric.Text.prototype._textDerivedPropertiesForSerialization.includes(prop)) {
+        fabric.Text.prototype._textDerivedPropertiesForSerialization.push(prop);
+      }
+    }
+    
+    // Register properties for IText objects
+    if (!fabric.IText.prototype._textDerivedPropertiesForSerialization) {
+      fabric.IText.prototype._textDerivedPropertiesForSerialization = [];
+    }
+    
+    // Add all enhanced properties to IText
+    const iTextProperties = [
+      'padding', 'borderRadius', 'textShadow', 'textOutline', 
+      'textGradient', 'letterSpacing', 'textTransform'
+    ];
+    
+    for (const prop of iTextProperties) {
+      if (!fabric.IText.prototype._textDerivedPropertiesForSerialization.includes(prop)) {
+        fabric.IText.prototype._textDerivedPropertiesForSerialization.push(prop);
+      }
     }
   }
 }

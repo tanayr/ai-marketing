@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +11,9 @@ import { UrlInput } from "@/components/uploads/url-input";
 import { ImagePreview } from "./image-preview";
 import { PromptEditor } from "./prompt-editor";
 import { GenerationSettings, type GenerationSettings as Settings } from "./generation-settings";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, X } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { StreamingImageProgress } from "./streaming-image-progress";
 
 export default function ClonerStudio() {
   const { toast } = useToast();
@@ -25,14 +27,21 @@ export default function ClonerStudio() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [assetId, setAssetId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // State for streaming image generation
+  const [partialImages, setPartialImages] = useState<Array<{index: number, base64: string}>>([]);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Handle source image upload
   const handleImageUploaded = (imageUrl: string) => {
     setSourceImage(imageUrl);
     setGeneratedImage(null); // Reset any previous generation
+    setPartialImages([]); // Clear partial images
+    setGenerationProgress(0);
   };
 
-  // Generate image through the API
+  // Main generate image function - decides between streaming and standard generation
   const handleGenerateImage = async () => {
     if (!sourceImage || !prompt.trim()) {
       toast({
@@ -43,8 +52,22 @@ export default function ClonerStudio() {
       return;
     }
 
+    // Clear previous generation state
+    setGeneratedImage(null);
+    setPartialImages([]);
+    setGenerationProgress(0);
     setIsGenerating(true);
 
+    // Use streaming or standard generation based on settings
+    if (settings.streamingEnabled) {
+      await handleStreamingGeneration();
+    } else {
+      await handleStandardGeneration();
+    }
+  };
+
+  // Handle standard (non-streaming) image generation
+  const handleStandardGeneration = async () => {
     try {
       const response = await fetch("/api/studio/cloner/generate", {
         method: "POST",
@@ -83,6 +106,292 @@ export default function ClonerStudio() {
       });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Handle streaming image generation with partial images
+  const handleStreamingGeneration = async () => {
+    // Create a new AbortController for this request
+    abortControllerRef.current = new AbortController();
+    
+    // Ensure we're using the gpt-4.1 model for streaming
+    // Our backend enforces this, but we should also adjust UI state
+    if (settings.model !== 'gpt-4.1') {
+      toast({
+        title: "Model adjusted",
+        description: "Streaming requires GPT-4.1. Model has been automatically selected.",
+      });
+      
+      // Update settings to use gpt-4.1
+      setSettings(prev => ({
+        ...prev,
+        model: 'gpt-4.1'
+      }));
+    }
+    
+    try {
+      const response = await fetch("/api/studio/cloner/stream-generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          sourceImage,
+          settings: {
+            ...settings,
+            model: 'gpt-4.1', // Enforce gpt-4.1 for streaming
+            partialImages: settings.partialImages || 2
+          },
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Generation failed: ${response.statusText}`);
+      }
+      
+      if (!response.body) {
+        throw new Error("No response body received");
+      }
+      
+      // Process the streamed events
+      await processStreamingResponse(response.body);
+      
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        toast({
+          title: "Generation cancelled",
+          description: "Image generation was cancelled",
+        });
+      } else {
+        toast({
+          title: "Generation failed",
+          description: error instanceof Error ? error.message : "Failed to generate image",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsGenerating(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  // Process streaming response and handle partial images
+  const processStreamingResponse = async (stream: ReadableStream) => {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    
+    let partialImagesReceived = 0;
+    const maxPartialImages = settings.partialImages || 2;
+    let finalImageReceived = false;
+    let buffer = '';
+    let responseId: string | null = null;
+    let finalImageBase64: string | null = null;
+    
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // Decode the chunk and add to buffer
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        
+        // Process complete SSE events from the buffer
+        let eventIndex;
+        while ((eventIndex = buffer.indexOf('\n\n')) >= 0) {
+          const eventData = buffer.slice(0, eventIndex);
+          buffer = buffer.slice(eventIndex + 2); // +2 to skip the double newline
+          
+          // Process event - look for data: lines
+          const lines = eventData.split('\n');
+          let dataJson = '';
+          let eventType = '';
+          
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventType = line.slice(7); // Extract event type for debugging
+              console.log(line); // Log the event type for debugging
+            } else if (line.startsWith('data:')) {
+              dataJson = line.slice(5); // Extract the JSON data
+            }
+          }
+          
+          // Process the JSON data if we found any
+          if (dataJson) {
+            try {
+              const data = JSON.parse(dataJson);
+              console.log('Stream event:', data.type);
+              
+              // Store response ID if present
+              if (data.response?.id && !responseId) {
+                responseId = data.response.id;
+                console.log('Response ID:', responseId);
+              }
+              
+              // Handle partial image events
+              if (data.type === 'response.image_generation_call.partial_image') {
+                // Handle partial image
+                partialImagesReceived++;
+                console.log(`Received partial image ${data.partial_image_index}`);
+                
+                // Add debugging for the content
+                console.log('Partial image data structure:', JSON.stringify(data).substring(0, 100) + '...');
+                
+                // Check multiple possible locations for image data
+                const base64Data = data.partial_image_b64 || 
+                                  (data.content && data.content.image_b64) ||
+                                  data.image_b64;
+                
+                if (base64Data) {
+                  setPartialImages(prev => [...prev, {
+                    index: data.partial_image_index || partialImagesReceived - 1,
+                    base64: base64Data
+                  }]);
+                  
+                  // Update progress based on the number of partial images
+                  const progressPercent = Math.min(
+                    Math.round((partialImagesReceived / (maxPartialImages + 1)) * 100),
+                    90 // Cap at 90% until final image
+                  );
+                  setGenerationProgress(progressPercent);
+                } else {
+                  console.warn('Partial image event missing image data');
+                }
+              } 
+              // Store the final image when found in any event
+              else if (data.type === 'response.image_generation_call.completed' ||
+                        (data.type === 'response.image_generation_call' && 
+                         data.status === 'completed')) {
+                
+                console.log('Completed event received, full data:', JSON.stringify(data).substring(0, 200) + '...');
+                
+                // Look for image data in various locations
+                const imageData = data.result || 
+                                 (data.content && data.content.image_b64) ||
+                                 data.image_b64 ||
+                                 (data.item && data.item.content && data.item.content.image_b64) ||
+                                 (data.response && data.response.output && data.response.output[0] && 
+                                  data.response.output[0].content && data.response.output[0].content.image_b64);
+                
+                if (imageData && !finalImageReceived) {
+                  finalImageReceived = true;
+                  finalImageBase64 = imageData;
+                  console.log('Found final image in completed event');
+                  setGenerationProgress(100);
+                  await saveGeneratedImage(imageData);
+                } else if (!finalImageReceived) {
+                  console.log('No image data in completed event, waiting for final response');
+                }
+              }
+              // Look for the final image in any content output
+              else if (data.type === 'response.completed' && !finalImageReceived) {
+                console.log('Final response completed event');
+                
+                // Try to extract the image from the final response
+                if (data.response && data.response.output) {
+                  for (const output of data.response.output) {
+                    if (output.type === 'image_generation_call' && output.content) {
+                      const imageData = output.content.image_b64 || output.result;
+                      if (imageData) {
+                        finalImageReceived = true;
+                        finalImageBase64 = imageData;
+                        console.log('Found final image in response.completed event');
+                        setGenerationProgress(100);
+                        await saveGeneratedImage(imageData);
+                        break;
+                      }
+                    }
+                  }
+                }
+                
+                // If we still haven't found the image, check if we have any partial images
+                if (!finalImageReceived && partialImagesReceived > 0) {
+                  const lastPartialImage = [...partialImages].pop();
+                  if (lastPartialImage) {
+                    console.log('Using last partial image as final image');
+                    finalImageReceived = true;
+                    finalImageBase64 = lastPartialImage.base64;
+                    setGenerationProgress(100);
+                    await saveGeneratedImage(lastPartialImage.base64);
+                  }
+                }
+              }
+              // Check for image data in content_part events
+              else if (data.type === 'response.content_part.added' && !finalImageReceived) {
+                // Try to find image data in content part
+                if (data.content && data.content.type === 'image' && data.content.image_b64) {
+                  finalImageReceived = true;
+                  finalImageBase64 = data.content.image_b64;
+                  console.log('Found final image in content_part.added event');
+                  setGenerationProgress(100);
+                  await saveGeneratedImage(data.content.image_b64);
+                }
+              }
+            } catch (e) {
+              console.error('Error parsing SSE data:', e);
+              console.error('Raw data JSON:', dataJson.substring(0, 100) + '...');
+            }
+          }
+        }
+      }
+      
+      // Final check - if we didn't find a final image but have partial images
+      if (!finalImageReceived && partialImagesReceived > 0) {
+        const lastPartialImage = [...partialImages].pop();
+        if (lastPartialImage) {
+          console.log('Using last partial image as final image (fallback)');
+          setGenerationProgress(100);
+          await saveGeneratedImage(lastPartialImage.base64);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+
+  // Save the generated image from streaming response
+  const saveGeneratedImage = async (base64Image: string) => {
+    try {
+      const response = await fetch("/api/studio/cloner/save-image", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          base64Image,
+          prompt,
+          settings,
+          sourceImage,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to save generated image");
+      }
+      
+      const data = await response.json();
+      setAssetId(data.asset.id);
+      setGeneratedImage(data.imageUrl);
+      
+      toast({
+        title: "Image generated",
+        description: "Your image was successfully created and saved as an asset.",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to save image",
+        description: "The image was generated but could not be saved",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Cancel ongoing generation
+  const handleCancelGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
@@ -158,6 +467,24 @@ export default function ClonerStudio() {
                 className="mb-6"
               />
               
+              {isGenerating && (
+                <div className="mb-4">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm">Generation Progress</span>
+                    <span className="text-sm">{generationProgress}%</span>
+                  </div>
+                  <Progress value={generationProgress} className="mb-4" />
+                  <Button 
+                    variant="destructive" 
+                    className="w-full mb-2"
+                    onClick={handleCancelGeneration}
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Cancel Generation
+                  </Button>
+                </div>
+              )}
+              
               <Button
                 onClick={handleGenerateImage}
                 disabled={isGenerating || !prompt.trim()}
@@ -174,6 +501,15 @@ export default function ClonerStudio() {
               </Button>
             </CardContent>
           </Card>
+          
+          {/* Show streaming progress with partial images */}
+          {isGenerating && partialImages.length > 0 && (
+            <StreamingImageProgress
+              partialImages={partialImages}
+              progress={generationProgress}
+              isGenerating={isGenerating}
+            />
+          )}
           
           {generatedImage && (
             <Card className="col-span-1 lg:col-span-2">

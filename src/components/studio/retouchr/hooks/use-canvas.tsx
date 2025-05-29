@@ -76,6 +76,28 @@ export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children
     // This includes objects, background color, and background image
     const jsonObj = canvas.toJSON(['id', 'name']);
     
+    // Debug logging for text objects to verify enhanced properties
+    if (jsonObj.objects && Array.isArray(jsonObj.objects)) {
+      const textObjects = jsonObj.objects.filter((obj: any) => obj.type?.includes('text'));
+      console.log(`Found ${textObjects.length} text objects during serialization`);
+      
+      // Log details of the first text object if available
+      if (textObjects.length > 0) {
+        const sample = textObjects[0];
+        console.log('Sample text object properties:', {
+          text: sample.text,
+          // Enhanced properties we added
+          padding: sample.padding,
+          borderRadius: sample.borderRadius,
+          letterSpacing: sample.letterSpacing,
+          textTransform: sample.textTransform,
+          hasTextShadow: !!sample.textShadow,
+          hasTextOutline: !!sample.textOutline,
+          hasTextGradient: !!sample.textGradient
+        });
+      }
+    }
+    
     // Explicitly save canvas dimensions
     // This ensures width and height are preserved even if fabric.toJSON() doesn't include them
     jsonObj.width = canvas.width;
@@ -128,16 +150,42 @@ export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children
       
       // Pre-process the objects to ensure they have proper types
       if (parsedData.objects) {
+        // Count various text types for debugging
+        const textStats = {
+          textCount: 0,
+          iTextCount: 0,
+          enhancedTextCount: 0,
+          advancedTextCount: 0,
+          unifiedTextCount: 0
+        };
+        
         parsedData.objects.forEach((obj: any) => {
-          // Log enhanced text objects for debugging
-          if (obj.type === 'enhanced-text') {
-            console.log('Found enhanced text to load:', {
-              text: obj.text,
-              padding: obj.padding,
-              borderRadius: obj.borderRadius
-            });
+          // Count different text types
+          if (obj.type?.includes('text')) {
+            textStats.textCount++;
+            
+            if (obj.type === 'i-text') {
+              textStats.iTextCount++;
+              // Log enhanced IText properties for debugging
+              console.log('IText properties during load:', {
+                text: obj.text,
+                // Enhanced properties
+                padding: obj.padding,
+                borderRadius: obj.borderRadius,
+                letterSpacing: obj.letterSpacing,
+                textTransform: obj.textTransform,
+                hasTextShadow: !!obj.textShadow,
+                hasTextOutline: !!obj.textOutline,
+                hasTextGradient: !!obj.textGradient
+              });
+            }
+            else if (obj.type === 'enhanced-text') textStats.enhancedTextCount++;
+            else if (obj.type === 'advanced-text') textStats.advancedTextCount++;
           }
         });
+        
+        // Log text statistics
+        console.log('Text object statistics during load:', textStats);
       }
       
       // Clear the canvas before loading
@@ -181,7 +229,8 @@ export const CanvasProvider: React.FC<{children: React.ReactNode}> = ({ children
                     const { EnhancedText } = require('../utils/enhanced-text');
                     
                     // Create a new EnhancedText instance
-                    const text = new EnhancedText(obj.text, {
+                    // Ensure text is never undefined to prevent split() errors
+                    const text = new EnhancedText(obj.text || '', {
                       ...obj,
                       padding: obj.padding || 0,
                       borderRadius: obj.borderRadius || 0

@@ -43,7 +43,7 @@ export class ClaudeClient {
       hasToolChoice: !!toolChoice,
       lastMessage: messages[messages.length - 1]?.content 
         ? (typeof messages[messages.length - 1]?.content === 'string' 
-            ? messages[messages.length - 1]?.content?.substring(0, 100) + '...'
+            ? (messages[messages.length - 1]?.content as string).substring(0, 100) + '...'
             : '[complex content]')
         : '[no content]'
     });
@@ -63,17 +63,23 @@ export class ClaudeClient {
         console.log('[ClaudeClient] 🔧 Using tool_choice:', toolChoice);
       }
 
-      console.log('[ClaudeClient] 🔧 Request body:', {
-        messages: requestBody.messages?.map((m: { role: string; content: any }) => ({ 
-          role: m.role, 
-          content: typeof m.content === 'string' 
-            ? m.content.substring(0, 100) + '...' 
-            : Array.isArray(m.content) 
-              ? `[${m.content.length} content blocks]`
-              : JSON.stringify(m.content).substring(0, 100) + '...'
-        })),
+      // Don't use any summary formatting for messages - show complete raw content
+      console.log('[ClaudeClient] 🔧 REQUEST BODY FULL:', {
+        messages: requestBody.messages,
         tools: requestBody.tools?.map((t: { name: string }) => t.name),
-        systemPrompt: systemPrompt?.substring(0, 100) + '...',
+        systemPrompt: systemPrompt,
+        tool_choice: requestBody.tool_choice
+      });
+      
+      // For a more readable summary, extract just roles and basic content info
+      console.log('[ClaudeClient] 🔧 Request roles summary:', 
+        requestBody.messages?.map((m: { role: string; content: any }, i: number) => `${i}: ${m.role}`)
+      );
+      
+      console.log('[ClaudeClient] 📋 FULL PROMPT BEING SENT TO CLAUDE:', {
+        messages: requestBody.messages,
+        tools: requestBody.tools,
+        systemPrompt: systemPrompt,
         tool_choice: requestBody.tool_choice
       });
 
@@ -87,7 +93,38 @@ export class ClaudeClient {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('[ClaudeClient] ❌ API Error:', { status: response.status, error: errorData.details || 'API request failed' });
+        
+        // Check if it's a token limit error
+        const isTokenLimitError = errorData.details?.includes('token') && errorData.details?.includes('too long');
+        
+        // Log the error with more context
+        console.error('[ClaudeClient] ❌ API Error:', { 
+          status: response.status, 
+          error: errorData.details || 'API request failed'
+        });
+        
+        // For token limit errors, log more details about the prompt
+        if (isTokenLimitError) {
+          console.error('[ClaudeClient] 📊 TOKEN LIMIT ERROR DETAILS:', {
+            messageCount: requestBody.messages.length,
+            systemPromptLength: systemPrompt?.length || 0,
+            toolsCount: requestBody.tools?.length || 0,
+            errorMessage: errorData.details
+          });
+          
+          // Log message sizes to help identify the issue
+          console.error('[ClaudeClient] 📏 MESSAGE SIZES:', requestBody.messages.map((m: any, i: number) => ({
+            index: i,
+            role: m.role,
+            contentType: typeof m.content,
+            contentLength: typeof m.content === 'string' 
+              ? m.content.length 
+              : Array.isArray(m.content) 
+                ? JSON.stringify(m.content).length 
+                : 'unknown'
+          })));
+        }
+        
         throw new Error(errorData.details || 'API request failed');
       }
 
@@ -203,17 +240,70 @@ export class ClaudeClient {
    */
   async continueWithToolResults(
     messages: ChatMessage[],
-    toolResults: any[],
+    toolResults: any[], // We ignore this parameter now since results are in messages
     tools: ToolDefinition[],
     systemPrompt?: string
   ): Promise<{ message: ChatMessage; toolCalls: ToolCall[] }> {
-    console.log('[ClaudeClient] 🔧 Continuing conversation with tool results:', toolResults.length);
+    console.log('[ClaudeClient] 🔧 Continuing conversation with tool results in message history');
     
-    // Tool results are already added to session.messages in ChatSystem, 
-    // so we can directly use the provided messages
+    // The messages parameter already contains the proper sequence of:
+    // 1. Assistant message with tool_use
+    // 2. User message with tool_result
+    // This is required by Claude API's pattern matching
     console.log('[ClaudeClient] 🚀 Sending conversation with', messages.length, 'messages');
-    const { message, toolCalls } = await this.sendMessage(messages, tools, { systemPrompt });
-    return { message, toolCalls };
+    
+    // Log the full raw messages to show complete tool call and result content
+    // Don't use any formatting that might hide content
+    console.log('[ClaudeClient] 🔍 FULL TOOL CONVERSATION:', {
+      messageCount: messages.length,
+      completeMessages: messages.map((msg, i) => ({
+        index: i,
+        role: msg.role,
+        fullContent: msg.content // Show the complete content without any summarization
+      }))
+    });
+    
+    // Check for potentially large messages that might cause token limits
+    const largeMessages = messages.filter(msg => {
+      if (typeof msg.content === 'string' && msg.content.length > 10000) {
+        return true;
+      }
+      if (Array.isArray(msg.content) && JSON.stringify(msg.content).length > 10000) {
+        return true;
+      }
+      return false;
+    });
+    
+    if (largeMessages.length > 0) {
+      console.warn('[ClaudeClient] ⚠️ POTENTIAL TOKEN LIMIT ISSUE:', {
+        totalMessages: messages.length,
+        largeMessagesCount: largeMessages.length,
+        largeMessageIndices: largeMessages.map((_, i) => i)
+      });
+    }
+    
+    try {
+      // Important: Do not optimize or filter messages here - Claude needs the exact sequence
+      const { message, toolCalls } = await this.sendMessage(messages, tools, { systemPrompt });
+      return { message, toolCalls };
+    } catch (error) {
+      // If we get a token limit error, provide additional diagnostic information
+      if (error instanceof Error && error.message.includes('token') && error.message.includes('too long')) {
+        console.error('[ClaudeClient] 📊 TOKEN LIMIT IN CONTINUATION:', {
+          messageCount: messages.length,
+          largeMessagesCount: largeMessages.length,
+          errorDetails: error.message,
+          // Calculate total message content size
+          totalContentSize: messages.reduce((acc, msg) => {
+            const contentSize = typeof msg.content === 'string' 
+              ? msg.content.length 
+              : JSON.stringify(msg.content).length;
+            return acc + contentSize;
+          }, 0)
+        });
+      }
+      throw error;
+    }
   }
 
   /**

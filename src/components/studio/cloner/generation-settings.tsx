@@ -15,6 +15,8 @@ export interface GenerationSettings {
   model: string;
   size: string;
   style: string;
+  streamingEnabled?: boolean;
+  partialImages?: number;
 }
 
 interface GenerationSettingsProps {
@@ -49,8 +51,10 @@ export function GenerationSettings({
           <SelectContent>
             <SelectGroup>
               <SelectLabel>OpenAI Models</SelectLabel>
-              <SelectItem value="gpt-image-1">GPT-Image-1 (Best quality)</SelectItem>
-              <SelectItem value="dall-e-3">DALL-E 3</SelectItem>
+              <SelectItem value="gpt-image-1">GPT-Image-1 (Best quality - no streaming)</SelectItem>
+              <SelectItem value="gpt-4.1-mini">GPT-4.1-mini (Standard quality)</SelectItem>
+              <SelectItem value="gpt-4.1">GPT-4.1 (High quality + streaming)</SelectItem>
+              <SelectItem value="dall-e-3">DALL-E 3 (Legacy)</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
@@ -103,6 +107,63 @@ export function GenerationSettings({
               <SelectItem value="natural">Natural (More subtle look)</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+      )}
+      
+      {/* Advanced Streaming Options - Only for gpt-4.1 */}
+      {settings.model === "gpt-4.1" && (
+        <div className="space-y-4 mt-4 pt-4 border-t">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="streamingEnabled" className="mr-2">Enable Streaming</Label>
+              <p className="text-xs text-muted-foreground">See generation progress in real-time</p>
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="streamingEnabled"
+                checked={settings.streamingEnabled}
+                onChange={(e) => {
+                  const newSettings = {
+                    ...settings,
+                    streamingEnabled: e.target.checked
+                  };
+                  onChange(newSettings);
+                }}
+                className="mr-2 h-4 w-4"
+              />
+            </div>
+          </div>
+          
+          <p className="text-xs text-amber-600 mt-1">
+            Note: Streaming is only available with the gpt-4.1 model. When enabled, you'll see partial images as they're generated.
+          </p>
+          
+          {settings.streamingEnabled && (
+            <div>
+              <Label htmlFor="partialImages">Partial Images</Label>
+              <Select
+                value={String(settings.partialImages || 2)}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    partialImages: parseInt(value)
+                  };
+                  onChange(newSettings);
+                }}
+              >
+                <SelectTrigger id="partialImages">
+                  <SelectValue placeholder="Number of partial images" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 (Faster)</SelectItem>
+                  <SelectItem value="2">2 (Recommended)</SelectItem>
+                  <SelectItem value="3">3 (More detail)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Number of intermediate images to show during generation</p>
+            </div>
+          )}
         </div>
       )}
     </div>

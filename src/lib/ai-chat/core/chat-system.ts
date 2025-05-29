@@ -86,6 +86,7 @@ export class ChatSystem {
     organization: any;
     canvas?: any;
     selectedObjects?: any[];
+    promptId?: string;
   }): Promise<ChatSession> {
     const contextResult = this.detector.detectContext(context.route);
     const providerId = contextResult?.provider || 'retouchr';
@@ -102,6 +103,7 @@ export class ChatSystem {
       selectedObjects: context.selectedObjects,
       user: context.user,
       organization: context.organization,
+      promptId: context.promptId || 'default', // Include promptId from context
     };
 
     const session: ChatSession = {
@@ -117,7 +119,7 @@ export class ChatSystem {
 
     // Add system prompt if provider supports it
     if (provider?.getSystemPrompt) {
-      const systemPrompt = provider.getSystemPrompt(globalContext);
+      const systemPrompt = provider.getSystemPrompt?.(globalContext, false);
       if (systemPrompt) {
         session.messages.push({
           id: nanoid(),
@@ -153,7 +155,8 @@ export class ChatSystem {
   async sendMessage(
     sessionId: string,
     message: string,
-    strategy: 'parallel' | 'sequential' = 'parallel'
+    strategy: 'parallel' | 'sequential' = 'parallel',
+    imageData?: { file: File; base64: string }
   ): Promise<{
     initialResponse?: ChatMessage;   // NEW: Initial AI message (only for sequential)
     response: ChatMessage;          // Final or only response
@@ -168,12 +171,42 @@ export class ChatSystem {
       throw new Error('Session not found');
     }
 
+    // Create user message with image support
+    let messageContent: string | Array<any> = message;
+    let userMessageImageData: any = undefined;
+
+    if (imageData) {
+      // For Claude Vision API format
+      messageContent = [
+        {
+          type: 'text',
+          text: message
+        },
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: imageData.file.type || 'image/jpeg',
+            data: imageData.base64
+          }
+        }
+      ];
+      
+      // Store image data for preview
+      userMessageImageData = {
+        file: imageData.file,
+        base64: imageData.base64,
+        preview: URL.createObjectURL(imageData.file)
+      };
+    }
+
     // Add user message to history
     const userMessage: ChatMessage = {
       id: nanoid(),
       role: 'user',
-      content: message,
-      timestamp: Date.now()
+      content: messageContent,
+      timestamp: Date.now(),
+      imageData: userMessageImageData
     };
     session.messages.push(userMessage);
 
@@ -181,17 +214,39 @@ export class ChatSystem {
       // Get available tools for current provider
       const tools = this.getAvailableTools(session.provider);
       
-      // Get system prompt from provider
+      // Detect if the message contains an image
+      const hasImage = imageData !== undefined || 
+        (Array.isArray(messageContent) && messageContent.some(item => item.type === 'image'));
+      
+      // Get system prompt from provider with image context
       const provider = this.registry.getProvider(session.provider);
-      const systemPrompt = provider.getSystemPrompt?.(session.context);
+      const systemPrompt = provider.getSystemPrompt?.(session.context, hasImage);
+
+      // Only optimize if this is a fresh conversation or no tools have been used yet
+      // Otherwise Claude API needs to see the full message history with tool_result blocks
+      const hasToolResults = session.messages.some(msg => {
+        if (msg.role === 'user') {
+          try {
+            const parsed = JSON.parse(msg.content as string);
+            return Array.isArray(parsed) && parsed[0]?.type === 'tool_result';
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      });
+
+      // Only optimize if no previous tool results, otherwise send full history
+      const messages = hasToolResults ? session.messages : this.optimizeConversationHistory(session.messages);
+      console.log(`[ChatSystem] ${hasToolResults ? '⚠️ Using FULL message history (has tool results)' : '✅ Using optimized message history'}`)
 
       // Use sequential or parallel execution based on strategy
       if (strategy === 'sequential') {
-        return await this.handleSequentialExecution(session, tools, systemPrompt);
+        return await this.handleSequentialExecution(session, tools, systemPrompt, messages);
       } else {
         // Send to Claude (parallel execution)
         const { message: aiMessage, toolCalls } = await this.claude.sendMessage(
-          session.messages,
+          messages,
           tools,
           { systemPrompt }
         );
@@ -230,11 +285,14 @@ export class ChatSystem {
           }
           
           // Get next AI message with tool results
+          // NOTE: We must NOT optimize messages here as Claude API needs to see the exact
+          // sequence of assistant message with tool_use followed by user message with tool_result
+          // Using the full message history ensures this pattern is preserved
           const { message: followUpMessage } = await this.claude.continueWithToolResults(
-            session.messages,
-            toolExecution.results,
+            session.messages, // Use full message history with tool results
+            [], // Tool results are already in session.messages, don't pass them again
             tools,
-            systemPrompt
+            provider.getSystemPrompt?.(session.context, false)
           );
 
           session.messages.push(followUpMessage);
@@ -252,7 +310,7 @@ export class ChatSystem {
 
       // If no tools were called, just return the AI message
       const { message: aiMessage } = await this.claude.sendMessage(
-        session.messages,
+        messages,
         tools,
         { systemPrompt }
       );
@@ -283,7 +341,8 @@ export class ChatSystem {
   private async handleSequentialExecution(
     session: ChatSession,
     tools: ToolDefinition[],
-    systemPrompt?: string
+    systemPrompt?: string,
+    messages?: ChatMessage[]
   ): Promise<{
     initialResponse?: ChatMessage;
     response: ChatMessage;
@@ -297,7 +356,7 @@ export class ChatSystem {
     
     // Get initial AI response
     const { message: aiMessage, toolCalls: initialToolCalls } = await this.claude.sendMessage(
-      session.messages,
+      messages || session.messages,
       tools,
       { systemPrompt }
     );
@@ -413,9 +472,12 @@ export class ChatSystem {
         }
         
         // Get next AI message with tool results
+        // NOTE: We should NOT optimize messages here as Claude API needs to see the exact
+        // sequence of assistant message with tool_use followed by user message with tool_result
+        // Using the full message history ensures this pattern is preserved
         const { message: followUpMessage, toolCalls: newToolCalls } = await this.claude.continueWithToolResults(
           session.messages,
-          toolExecution.results,
+          [], // Tool results are already in session.messages, don't pass them again
           tools,
           systemPrompt
         );
@@ -469,6 +531,44 @@ export class ChatSystem {
   }
 
   /**
+   * Optimize conversation history for Claude API
+   * Removes tool_result messages and consolidates conversation to reduce token usage
+   */
+  private optimizeConversationHistory(messages: ChatMessage[], maxMessages: number = 20): ChatMessage[] {
+    console.log(`[ChatSystem] 🗂️ Optimizing conversation: ${messages.length} messages → filtering...`);
+    
+    // Filter out tool_result messages as they're not needed for Claude's context
+    const conversationMessages = messages.filter(msg => {
+      // Keep user messages that aren't tool results
+      if (msg.role === 'user') {
+        // Skip if content is tool_result JSON
+        try {
+          const parsed = JSON.parse(msg.content as string);
+          if (Array.isArray(parsed) && parsed[0]?.type === 'tool_result') {
+            return false;
+          }
+        } catch {
+          // Not JSON, keep the message
+        }
+        return true;
+      }
+      // Keep all assistant messages (they contain the tool calls)
+      return msg.role === 'assistant';
+    });
+
+    // Limit conversation to recent messages to prevent prompt bloat
+    let finalMessages = conversationMessages;
+    if (conversationMessages.length > maxMessages) {
+      // Keep first message (usually contains important context) + recent messages
+      const recent = conversationMessages.slice(-maxMessages + 1);
+      finalMessages = [conversationMessages[0], ...recent];
+    }
+
+    console.log(`[ChatSystem] ✅ Optimized to ${finalMessages.length} messages (${messages.length - finalMessages.length} tool results removed)`);
+    return finalMessages;
+  }
+
+  /**
    * Stream message response
    */
   async *streamMessage(
@@ -502,9 +602,27 @@ export class ChatSystem {
       const toolCalls: ToolCall[] = [];
       let content = '';
 
+      // Only optimize if this is a fresh conversation or no tools have been used yet
+      // Otherwise Claude API needs to see the full message history with tool_result blocks
+      const hasToolResults = session.messages.some(msg => {
+        if (msg.role === 'user') {
+          try {
+            const parsed = JSON.parse(msg.content as string);
+            return Array.isArray(parsed) && parsed[0]?.type === 'tool_result';
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      });
+
+      // Only optimize if no previous tool results, otherwise send full history
+      const messages = hasToolResults ? session.messages : this.optimizeConversationHistory(session.messages);
+      console.log(`[ChatSystem] ${hasToolResults ? '⚠️ Using FULL message history (has tool results)' : '✅ Using optimized message history'}`)
+
       // Stream response from Claude
       for await (const chunk of this.claude.streamMessage(
-        session.messages,
+        messages,
         tools,
         systemPrompt
       )) {
@@ -556,11 +674,14 @@ export class ChatSystem {
         }
         
         // Continue with tool results
+        // NOTE: We must NOT optimize messages here as Claude API needs to see the exact
+        // sequence of assistant message with tool_use followed by user message with tool_result
+        // Using the full message history ensures this pattern is preserved
         const { message: followUpMessage } = await this.claude.continueWithToolResults(
-          session.messages,
-          toolExecution.results,
+          session.messages, // Use full message history with tool results
+          [], // Tool results are already in session.messages, don't pass them again
           tools,
-          systemPrompt
+          provider.getSystemPrompt?.(session.context, false)
         );
 
         session.messages.push(followUpMessage);

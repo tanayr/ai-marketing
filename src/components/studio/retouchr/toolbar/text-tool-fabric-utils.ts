@@ -1,5 +1,5 @@
 import { fabric, FabricIText } from '../utils/fabric-imports';
-import { EnhancedText } from '../utils/enhanced-text'; // Import our custom text class
+// We're now using the enhanced fabric.IText directly instead of custom text classes
 
 export interface FabricTextProperties {
   text?: string;
@@ -32,7 +32,7 @@ export const updateActiveTextObject = (
   if (!canvas) return;
   const activeObject = canvas.getActiveObject();
 
-  if (activeObject && (activeObject.type === 'text' || activeObject.type === 'i-text' || activeObject.type === 'enhanced-text')) {
+  if (activeObject && activeObject.type && typeof activeObject.type === 'string' && activeObject.type.includes('text')) {
     // Cast to any to set potentially custom properties like borderRadius
     // or use activeObject.set(updates as any) if FabricIText is strict
     (activeObject as any).set(updates as any);
@@ -53,8 +53,9 @@ export const addTextToCanvas = (
   const canvasWidth = (canvas as any).width || 800;
   const canvasHeight = (canvas as any).height || 600;
 
-  // Use our EnhancedText class instead of fabric.Text
-  const textObject = new EnhancedText(text, {
+  // Use standard fabric.IText directly
+  // The IText class has been enhanced with all the features via text-extensions.ts
+  const textObject = new fabric.IText(text || '', {
     left: canvasWidth / 2,
     top: canvasHeight / 2,
     originX: 'center',
@@ -80,7 +81,7 @@ export const getActiveTextObjectProperties = (
   if (!canvas) return null;
   const activeObject = canvas.getActiveObject();
 
-  if (activeObject && (activeObject.type === 'text' || activeObject.type === 'i-text' || activeObject.type === 'enhanced-text')) {
+  if (activeObject && activeObject.type && typeof activeObject.type === 'string' && activeObject.type.includes('text')) {
     const textObj = activeObject as any; // Cast to any to access all text properties
     return {
       text: textObj.text || '',

@@ -12,11 +12,20 @@ export class EnhancedText extends (fabric.IText as any) {
 
   static type = 'enhanced-text';
 
-  constructor(text: string, options: any = {}) {
-    super(text, options);
+  constructor(text: string | undefined, options: any = {}) {
+    // Ensure text is never undefined to prevent split() errors
+    const safeText = text || '';
+    super(safeText, options);
     this.type = EnhancedText.type;
     this.padding = options.padding || 0;
     this.borderRadius = options.borderRadius || 0;
+    
+    // Preserve ID from options or create a new one if not provided
+    if (options.id) {
+      this.id = options.id;
+    } else if (!this.id) {
+      this.id = `text_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    }
   }
   
   /**
@@ -30,6 +39,11 @@ export class EnhancedText extends (fabric.IText as any) {
     obj.type = EnhancedText.type;
     obj.padding = this.padding;
     obj.borderRadius = this.borderRadius;
+    
+    // Ensure ID is preserved during serialization
+    if (this.id) {
+      obj.id = this.id;
+    }
     
     return obj;
   }
@@ -243,7 +257,8 @@ export class EnhancedText extends (fabric.IText as any) {
    * Register class with fabric to enable JSON serialization/deserialization
    */
   static fromObject(options: any, callback: Function) {
-    return callback && callback(new EnhancedText(options.text, options));
+    // Ensure text is never undefined when deserializing
+    return callback && callback(new EnhancedText(options.text || '', options));
   }
 }
 
@@ -251,15 +266,24 @@ export class EnhancedText extends (fabric.IText as any) {
 fabric.EnhancedText = EnhancedText;
 
 // Set caching properties to ensure Fabric.js knows our class properties should be serialized
+fabric.util.object.extend(fabric.EnhancedText.prototype, {
+  cacheProperties: fabric.IText.prototype.cacheProperties.concat([
+    'padding', 
+    'borderRadius',
+    'id'
+  ])
+});
+
+// Initialize the array if it doesn't exist
 if (!fabric.Text.prototype._textDerivedPropertiesForSerialization) {
-  // Initialize property if not already present
   fabric.Text.prototype._textDerivedPropertiesForSerialization = [];
 }
 
 // Add the custom properties to be serialized with our text objects
 fabric.Text.prototype._textDerivedPropertiesForSerialization.push(
   'padding',
-  'borderRadius'
+  'borderRadius',
+  'id'
 );
 
 // Store the original fromObject function before overriding it
@@ -274,11 +298,14 @@ if (fabric.IText && typeof fabric.IText.fromObject === 'function') {
 const enhancedTextFromObject = function(object: Record<string, any>, callback: Function) {
   try {
     console.log('Creating EnhancedText from object:', object);
-    return callback(new EnhancedText(object.text, object));
+    // Ensure text is never undefined
+    const safeText = object.text || '';
+    return callback(new EnhancedText(safeText, object));
   } catch (err) {
     console.error('Error creating EnhancedText:', err);
     // Fallback to regular text in case of errors
-    return callback(new fabric.Text(object.text, object));
+    // Also protect the fallback with safe text
+    return callback(new fabric.Text(object.text || '', object));
   }
 };
 
@@ -296,7 +323,8 @@ fabric.Text.fromObject = function(object: Record<string, any>, callback: Functio
   if (originalTextFromObject) {
     return originalTextFromObject(object, callback);
   } else {
-    return callback(new fabric.Text(object.text, object));
+    // Ensure text is never undefined here either
+    return callback(new fabric.Text(object.text || '', object));
   }
 };
 
@@ -306,7 +334,7 @@ declare global {
     class EnhancedText extends fabric.IText {
       padding: number;
       borderRadius: number;
-      constructor(text: string, options?: any);
+      constructor(text: string | undefined, options?: any);
     }
   }
 }

@@ -6,11 +6,13 @@ import { ChatSystem } from '@/lib/ai-chat/core/chat-system';
 import { ContextDetector } from '@/lib/ai-chat/core/context-detector';
 import { ClaudeClient } from '@/lib/ai-chat/client/claude-client';
 import { ToolEvent } from '@/lib/ai-chat/core/tool-executor';
+import { ProviderRegistry } from '@/lib/ai-chat/providers/registry';
 
 interface ChatContext {
   provider?: string;
   designId?: string;
   route?: string;
+  promptId?: string;
   [key: string]: any;
 }
 
@@ -36,6 +38,7 @@ interface ToolExecutionStatus {
   status: 'running' | 'success' | 'error';
   result?: any;
   executionId?: string;
+  messageId?: string; // Add messageId to associate tool with message
 }
 
 export function useGlobalChat() {
@@ -48,6 +51,8 @@ export function useGlobalChat() {
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
   const [chatSystem] = useState(() => new ChatSystem());
   const [claudeClient] = useState(() => new ClaudeClient());
+  const [promptOptions, setPromptOptions] = useState<Array<{ id: string; name: string; description: string }>>([]);
+  const [selectedPromptId, setSelectedPromptId] = useState<string>('default');
   const toolEventHandlersRef = useRef<boolean>(false);
 
   // Set up tool execution event listeners
@@ -75,9 +80,10 @@ export function useGlobalChat() {
             newMap.set(event.toolCallId, {
               toolName: event.toolName,
               status: 'running',
-              executionId: event.toolCallId
+              executionId: event.toolCallId,
+              messageId: activeMessage !== null ? activeMessage : undefined // Associate with current active message
             });
-            console.log(`[useGlobalChat] 📝 Updated tool status for ${event.toolCallId}: running`);
+            console.log(`[useGlobalChat] 📝 Updated tool status for ${event.toolCallId}: running (message: ${activeMessage})`);
             return newMap;
           });
         } 
@@ -86,11 +92,14 @@ export function useGlobalChat() {
           // Update status for this tool to 'success' with result
           setToolExecutionStatuses(prev => {
             const newMap = new Map(prev);
+            // Preserve the messageId from the previous status if it exists
+            const prevStatus = prev.get(event.toolCallId);
             newMap.set(event.toolCallId, {
               toolName: event.toolName,
               status: 'success',
               result: event.result,
-              executionId: event.toolCallId
+              executionId: event.toolCallId,
+              messageId: prevStatus?.messageId || (activeMessage !== null ? activeMessage : undefined) // Keep messageId association
             });
             return newMap;
           });
@@ -100,11 +109,14 @@ export function useGlobalChat() {
           // Update status for this tool to 'error'
           setToolExecutionStatuses(prev => {
             const newMap = new Map(prev);
+            // Preserve the messageId from the previous status if it exists
+            const prevStatus = prev.get(event.toolCallId);
             newMap.set(event.toolCallId, {
               toolName: event.toolName,
               status: 'error',
               result: { error: event.error },
-              executionId: event.toolCallId
+              executionId: event.toolCallId,
+              messageId: prevStatus?.messageId || (activeMessage !== null ? activeMessage : undefined) // Keep messageId association
             });
             return newMap;
           });
@@ -161,49 +173,79 @@ export function useGlobalChat() {
     return undefined;
   }, [chatSystem]);
 
-  // Detect current context based on route
+  // Initialize context detector for the current route
   useEffect(() => {
-    const detectContext = async () => {
+    const updateContext = async () => {
       try {
-        const contextDetector = ContextDetector.getInstance();
-        const context = await contextDetector.detectContext(pathname);
+        console.log('[useGlobalChat] 📍 Route changed, detecting new context for:', pathname);
         
-        // Transform ContextDetectionResult to ChatContext
+        const detector = ContextDetector.getInstance();
+        const detectionResult = await detector.detectContext(pathname);
+        
+        console.log('[useGlobalChat] 🧩 New context detected:', detectionResult);
+        
+        // Transform detection result to chat context
         const chatContext: ChatContext = {
-          provider: context.provider || undefined,
+          provider: detectionResult.provider || undefined,
           route: pathname,
-          ...(context.context || {})
+          promptId: selectedPromptId, // Add selected prompt ID
+          ...(detectionResult.context || {})
         };
         
-        setCurrentContext(chatContext);
-        
-        // Reset session when context changes
-        setCurrentSession(null);
-        
-        // Get available tools for current context
-        if (context?.provider) {
-          const tools = await chatSystem.getAvailableTools(context.provider);
-          setAvailableTools(tools);
+        // If context has a provider, get available tools and prompt options
+        if (chatContext.provider) {
+          const registry = ProviderRegistry.getInstance();
+          const provider = registry.getProvider(chatContext.provider);
+          
+          // Get tools for this provider
+          const providerTools = provider.tools || [];
+          setAvailableTools(providerTools);
+          console.log(`[useGlobalChat] 🧰 Loaded ${providerTools.length} tools for provider:`, chatContext.provider);
+          
+          // Get prompt options if provider supports them
+          if (provider.getPromptOptions) {
+            const options = provider.getPromptOptions();
+            setPromptOptions(options);
+            console.log(`[useGlobalChat] 📝 Loaded ${options.length} prompt options for provider:`, chatContext.provider);
+          } else {
+            setPromptOptions([]);
+          }
         } else {
           setAvailableTools([]);
+          setPromptOptions([]);
         }
+        
+        setCurrentContext(chatContext);
       } catch (error) {
-        console.error('Error detecting context:', error);
-        setCurrentContext(null);
-        setAvailableTools([]);
+        console.error('[useGlobalChat] Error detecting context:', error);
       }
     };
-
-    detectContext();
-  }, [pathname, chatSystem]);
+    
+    updateContext();
+  }, [pathname, selectedPromptId]);
 
   // Function to reset session when needed (e.g., for debugging or fresh start)
   const resetSession = useCallback(() => {
-    console.log('[useGlobalChat] 🔄 Manually resetting session');
     setCurrentSession(null);
     setToolExecutionStatuses(new Map());
+    setStreamingResponse('');
     setActiveMessage(null);
+    console.log('[useGlobalChat] 🔄 Session reset');
   }, []);
+
+  // Update the selected prompt
+  const selectPrompt = useCallback((promptId: string) => {
+    console.log('[useGlobalChat] 📝 Selecting prompt:', promptId);
+    setSelectedPromptId(promptId);
+    
+    // Update the current context with the new promptId
+    if (currentContext) {
+      setCurrentContext({
+        ...currentContext,
+        promptId
+      });
+    }
+  }, [currentContext]);
 
   const sendMessage = useCallback(async (
     message: string,
@@ -211,7 +253,8 @@ export function useGlobalChat() {
     tools: ToolDefinition[],
     messageId: string,
     forceNewSession: boolean = false,
-    useSequential: boolean = true
+    useSequential: boolean = true,
+    imageData?: { file: File; base64: string }
   ): Promise<{
     hasInitialResponse: boolean;
     initialResponseContent?: string;
@@ -225,8 +268,12 @@ export function useGlobalChat() {
     }>;
   }> => {
     try {
-      // Clear previous tool statuses for new message
-      setToolExecutionStatuses(new Map());
+      // Set active message ID for tool execution status tracking
+      setActiveMessage(messageId);
+      
+      // Don't clear previous tool statuses for new message
+      // We'll use messageId to filter instead of clearing all
+      // setToolExecutionStatuses(new Map());
       
       let session = currentSession;
       
@@ -237,12 +284,15 @@ export function useGlobalChat() {
           organization: { id: 'current-org' }, // This would come from actual auth context
           canvas: (window as any).fabricCanvas, // Access global canvas if available
           selectedObjects: (window as any).selectedObjects || [],
-          route: pathname
+          route: pathname,
+          promptId: selectedPromptId // Add promptId to session creation
         });
         setCurrentSession(session);
         console.log('[useGlobalChat] ✅ Session created:', session.id);
       } else {
-        console.log('[useGlobalChat] 🔄 Reusing existing session:', session.id);
+        // Update existing session with current promptId
+        chatSystem.updateSessionContext(session.id, { promptId: selectedPromptId });
+        console.log('[useGlobalChat] 🔄 Reusing existing session:', session.id, 'with promptId:', selectedPromptId);
       }
 
       // Use sequential execution by default for multi-tool tasks
@@ -255,7 +305,7 @@ export function useGlobalChat() {
         strategy
       });
 
-      const result = await chatSystem.sendMessage(session.id, message, strategy);
+      const result = await chatSystem.sendMessage(session.id, message, strategy, imageData);
       
       console.log('[useGlobalChat] 📥 Received initial response:', {
         hasInitialResponse: !!result.initialResponse,
@@ -305,7 +355,15 @@ export function useGlobalChat() {
         initialResponseToolCalls: result.initialResponse?.toolCalls?.length || 0,
         finalResponseContent: finalResponseText,
         finalToolCalls: result.response.toolCalls?.length || 0,
-        toolCallsWithStatus: Array.from(toolExecutionStatuses.values()).map(status => ({
+        toolCallsWithStatus: Array.from(toolExecutionStatuses.values())
+          .filter(status => {
+            // Debug log to see what message IDs we have vs what we're expecting
+            console.log(`[useGlobalChat] DEBUG: Tool status messageId=${status.messageId}, current messageId=${messageId}`);
+            // More permissive filter: include status if it has no messageId OR matches current messageId
+            // This is temporary for debugging - we should revert to the strict equality check
+            return status.messageId === messageId || !status.messageId;
+          })
+          .map(status => ({
           id: status.executionId || 'unknown',
           name: status.toolName,
           status: status.status
@@ -320,10 +378,13 @@ export function useGlobalChat() {
   return {
     currentContext,
     availableTools,
-    sendMessage,
     streamingResponse,
     toolExecutionStatuses,
     activeMessage,
-    resetSession
+    promptOptions,
+    selectedPromptId,
+    sendMessage,
+    resetSession,
+    selectPrompt
   };
 }

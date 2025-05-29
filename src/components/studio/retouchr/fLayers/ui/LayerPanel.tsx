@@ -106,13 +106,17 @@ export const LayerPanel: React.FC = () => {
     }
   }, [layers, getAllGroups, canvasHash, initialGroupsLoadedRef]);
   
-  // Use the useFabricSync hook only when canvas is ready AND groups are loaded
-  // This prevents the hook from resetting layers before groups are loaded
-  const shouldSyncFabric = canvasReady && initialGroupsLoadedRef.current;
+  // Determine when to use the fabric sync hook
+  // Original logic required both canvas ready AND groups loaded
+  // Modified to ensure layers show up even without groups
+  const shouldSyncFabric = canvasReady; // Removed dependency on initialGroupsLoadedRef
+  
+  // Pass groupsRef only if initialGroupsLoadedRef is true
+  // This prevents potentially creating duplicate layers
   const { selectLayerOnCanvas } = useFabricSync(
     shouldSyncFabric ? canvas : null,
     setLayers,
-    groupsRef.current
+    initialGroupsLoadedRef.current ? groupsRef.current : []
   );
 
   // Generate canvas hash when canvas data changes
@@ -125,34 +129,44 @@ export const LayerPanel: React.FC = () => {
   
   // Load saved layer groups - only once when component mounts
   useEffect(() => {
-    // Skip if we've already loaded groups or don't have a canvas hash
-    if (initialGroupsLoadedRef.current || !canvasHash || !canvasReady) {
+    // Skip if we've already loaded groups
+    if (initialGroupsLoadedRef.current) {
       return;
     }
 
-    console.log('Loading saved groups for hash:', canvasHash);
-    
-    // Try loading canvas-specific groups first
-    const canvasGroups = loadLayerGroupsForCanvas(canvasHash);
-    
-    if (canvasGroups.length > 0) {
-      console.log('Loaded canvas-specific groups:', canvasGroups);
-      loadedGroupsRef.current = canvasGroups;
-      initializeWithGroups(canvasGroups);
-    } else {
-      // Fall back to general groups
-      const generalGroups = loadLayerGroups();
-      if (generalGroups.length > 0) {
-        console.log('Loaded general groups:', generalGroups);
-        loadedGroupsRef.current = generalGroups;
-        initializeWithGroups(generalGroups);
-      } else {
-        console.log('No saved groups found - proceeding with empty groups');
-      }
+    // First check: are we ready to try loading groups?
+    if (!canvasReady) {
+      return;
     }
     
-    // Mark that we've completed the loading attempt (even if no groups found)
-    // This allows useFabricSync to proceed
+    // If we have a canvas hash, try loading specific groups
+    if (canvasHash) {
+      console.log('Loading saved groups for hash:', canvasHash);
+      
+      // Try loading canvas-specific groups first
+      const canvasGroups = loadLayerGroupsForCanvas(canvasHash);
+      
+      if (canvasGroups.length > 0) {
+        console.log('Loaded canvas-specific groups:', canvasGroups);
+        loadedGroupsRef.current = canvasGroups;
+        initializeWithGroups(canvasGroups);
+      } else {
+        // Fall back to general groups
+        const generalGroups = loadLayerGroups();
+        if (generalGroups.length > 0) {
+          console.log('Loaded general groups:', generalGroups);
+          loadedGroupsRef.current = generalGroups;
+          initializeWithGroups(generalGroups);
+        } else {
+          console.log('No saved groups found - proceeding with empty groups');
+        }
+      }
+    } else {
+      console.log('No canvas hash available yet - proceeding with layer initialization anyway');
+    }
+    
+    // Mark initialization complete even if no hash or groups found
+    // This allows useFabricSync to proceed with layer display
     initialGroupsLoadedRef.current = true;
   }, [canvasHash, canvasReady, initializeWithGroups]);
   

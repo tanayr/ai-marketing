@@ -14,6 +14,7 @@ import {
   Building,
   Ticket,
   Image,
+  Sparkles,
 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { appConfig } from "@/lib/config";
@@ -33,6 +34,7 @@ const navigation = [
   { name: "Organizations", href: "/super-admin/organizations", icon: Building },
   { name: "Lifetime Deal", href: "/super-admin/coupons", icon: Ticket },
   { name: "Avatars", href: "/super-admin/avatars", icon: Image },
+  { name: "Creative Inspirations", href: "/super-admin/creative-inspirations", icon: Sparkles },
   { name: "Messages", href: "/super-admin/messages", icon: MessageSquare },
   { name: "Waitlist", href: "/super-admin/waitlist", icon: ClipboardList },
   { name: "Logout", href: "/super-admin/logout", icon: LogOut },

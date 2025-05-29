@@ -158,7 +158,8 @@ export function useFabricSync(
     // Add listeners to a specific text object
     const addTextListener = (obj: any) => {
       // Only add listeners to text objects and avoid duplicates
-      if (!obj || (!obj.type || (obj.type !== 'text' && obj.type !== 'i-text' && obj.type !== 'enhanced-text')) || !obj.id) return;
+      // NOTE: Removed enhanced-text reference - using unified IText approach now
+      if (!obj || (!obj.type || (obj.type !== 'text' && obj.type !== 'i-text' /* && obj.type !== 'enhanced-text' */)) || !obj.id) return;
       
       // Skip if we already have a listener for this object
       if (newListeners.has(obj.id)) return;
@@ -193,7 +194,8 @@ export function useFabricSync(
       const objects = canvas.getObjects();
       if (objects && Array.isArray(objects)) {
         objects.forEach(obj => {
-          if (obj && (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'enhanced-text')) {
+          // NOTE: Removed enhanced-text reference - using unified IText approach now
+          if (obj && (obj.type === 'text' || obj.type === 'i-text' /* || obj.type === 'enhanced-text' */)) {
             addTextListener(obj);
           }
         });

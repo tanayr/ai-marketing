@@ -18,12 +18,20 @@ export async function POST(request: NextRequest) {
     const { messages, tools, organizationId, systemPrompt, stream } = body;
 
     console.log('[API] 🔧 Available tools:', tools?.map((t: any) => t.name) || []);
-    console.log('[API] 💬 Messages to send:', messages?.map((m: any) => ({ 
+    // Log abbreviated message summary for quick reference
+    console.log('[API] 💬 Messages summary:', messages?.map((m: any) => ({ 
       role: m.role, 
       content: typeof m.content === 'string' 
         ? m.content.substring(0, 100) + '...' 
         : JSON.stringify(m.content).substring(0, 100) + '...'
     })));
+    
+    // Log the COMPLETE prompt for debugging
+    console.log('[API] 📚 COMPLETE CLAUDE PROMPT:', {
+      messages: JSON.stringify(messages, null, 2),
+      system: systemPrompt,
+      tools: JSON.stringify(tools, null, 2)
+    });
 
     // Basic validation
     if (!messages || !Array.isArray(messages)) {
@@ -78,47 +86,121 @@ export async function POST(request: NextRequest) {
     if (stream) {
       // For now, let's disable streaming and just return regular response
       // TODO: Implement proper streaming support later
-      const response = await anthropic.messages.create(requestOptions);
-      console.log('[API] 📥 Claude response:', {
-        type: response.type,
-        role: response.role,
-        contentCount: response.content?.length,
-        contentTypes: response.content?.map((c: any) => c.type),
-        usage: response.usage
-      });
-
-      // Log tool calls separately for debugging
-      const toolUseBlocks = response.content?.filter((c: any) => c.type === 'tool_use') || [];
-      if (toolUseBlocks.length > 0) {
-        console.log('[API] 🔧 Tool calls detected:', toolUseBlocks.map((block: any) => ({
-          id: block.id,
-          name: block.name,
-          input: block.input
-        })));
+      try {
+        const response = await anthropic.messages.create(requestOptions);
+        console.log('[API] 📥 Claude response:', {
+          type: response.type,
+          role: response.role,
+          contentCount: response.content?.length,
+          contentTypes: response.content?.map((c: any) => c.type),
+          usage: response.usage
+        });
+  
+        // Log tool calls separately for debugging
+        const toolUseBlocks = response.content?.filter((c: any) => c.type === 'tool_use') || [];
+        if (toolUseBlocks.length > 0) {
+          console.log('[API] 🔧 Tool calls detected:', toolUseBlocks.map((block: any) => ({
+            id: block.id,
+            name: block.name,
+            input: block.input
+          })));
+        }
+  
+        return NextResponse.json(response);
+      } catch (error: any) {
+        // Handle token limit errors explicitly
+        if (error?.status === 400 && error?.error?.message?.includes('token') && error?.error?.message?.includes('too long')) {
+          console.error('[API] 📊 TOKEN LIMIT ERROR FROM CLAUDE:', {
+            error: error.error.message,
+            requestTokens: {
+              messagesCount: messages.length,
+              systemPromptLength: systemPrompt?.length || 0,
+              toolsCount: tools?.length || 0
+            },
+            rawError: error
+          });
+          
+          // Log average message sizes to help troubleshoot
+          const messageSizes = messages.map((m: any, i: number) => {
+            const contentSize = typeof m.content === 'string' 
+              ? m.content.length 
+              : JSON.stringify(m.content).length;
+            return { index: i, role: m.role, size: contentSize };
+          });
+          
+          // Sort by size to find largest messages
+          const sortedBySizeDesc = [...messageSizes].sort((a, b) => b.size - a.size);
+          console.error('[API] 📏 LARGEST MESSAGES:', sortedBySizeDesc.slice(0, 5));
+        } else {
+          console.error('[API] ❌ Claude API error:', error);
+        }
+        
+        // Return detailed error information to the client
+        return NextResponse.json({ 
+          error: error.error?.message || error.message || 'Claude API error',
+          status: error.status || 500,
+          details: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+          type: error.type || 'unknown_error'
+        }, { status: 500 });
       }
-
-      return NextResponse.json(response);
     } else {
-      const response = await anthropic.messages.create(requestOptions);
-      console.log('[API] 📥 Claude response:', {
-        type: response.type,
-        role: response.role,
-        contentCount: response.content?.length,
-        contentTypes: response.content?.map((c: any) => c.type),
-        usage: response.usage
-      });
-
-      // Log tool calls separately for debugging
-      const toolUseBlocks = response.content?.filter((c: any) => c.type === 'tool_use') || [];
-      if (toolUseBlocks.length > 0) {
-        console.log('[API] 🔧 Tool calls detected:', toolUseBlocks.map((block: any) => ({
-          id: block.id,
-          name: block.name,
-          input: block.input
-        })));
+      try {
+        const response = await anthropic.messages.create(requestOptions);
+        console.log('[API] 📥 Claude response:', {
+          type: response.type,
+          role: response.role,
+          contentCount: response.content?.length,
+          contentTypes: response.content?.map((c: any) => c.type),
+          usage: response.usage
+        });
+  
+        // Log tool calls separately for debugging
+        const toolUseBlocks = response.content?.filter((c: any) => c.type === 'tool_use') || [];
+        if (toolUseBlocks.length > 0) {
+          console.log('[API] 🔧 Tool calls detected:', toolUseBlocks.map((block: any) => ({
+            id: block.id,
+            name: block.name,
+            input: block.input
+          })));
+        }
+  
+        return NextResponse.json(response);
+      } catch (error: any) {
+        // Handle token limit errors explicitly
+        if (error?.status === 400 && error?.error?.message?.includes('token') && error?.error?.message?.includes('too long')) {
+          console.error('[API] 📊 TOKEN LIMIT ERROR FROM CLAUDE:', {
+            error: error.error.message,
+            requestTokens: {
+              messagesCount: messages.length,
+              systemPromptLength: systemPrompt?.length || 0,
+              toolsCount: tools?.length || 0
+            },
+            rawError: error
+          });
+          
+          // Log average message sizes to help troubleshoot
+          const messageSizes = messages.map((m: any, i: number) => {
+            const contentSize = typeof m.content === 'string' 
+              ? m.content.length 
+              : JSON.stringify(m.content).length;
+            return { index: i, role: m.role, size: contentSize };
+          });
+          
+          // Sort by size to find largest messages
+          const sortedBySizeDesc = [...messageSizes].sort((a, b) => b.size - a.size);
+          console.error('[API] 📏 LARGEST MESSAGES:', sortedBySizeDesc.slice(0, 5));
+        } else {
+          console.error('[API] ❌ Claude API error:', error);
+        }
+        
+        // Return detailed error information to the client
+        return NextResponse.json({ 
+          error: error.error?.message || error.message || 'Claude API error',
+          status: error.status || 500,
+          details: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+          type: error.type || 'unknown_error'
+        }, { status: 500 });
       }
-
-      return NextResponse.json(response);
     }
   } catch (error) {
     console.error('[API] ❌ Error calling Anthropic:', error);

@@ -112,6 +112,7 @@ export interface ToolProvider {
   contextRequirements: Record<string, string>;
   extractContext: (route: string, globalContext: any) => any;
   validateContext: (context: any) => { valid: boolean; errors: string[] };
-  getSystemPrompt?: (context: any) => string;
+  getSystemPrompt?: (context: any, hasImage?: boolean) => string;
+  getPromptOptions?: () => Array<{ id: string; name: string; description: string }>;
   cleanup?: () => Promise<void>;
 }

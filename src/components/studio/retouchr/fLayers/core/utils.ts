@@ -106,8 +106,9 @@ export function getLayerName(obj: any, index: number): string {
   // Check if object exists
   if (!obj) return `Layer ${index + 1}`;
   
-  // Handle all text layer types (text, i-text, enhanced-text)
-  if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'enhanced-text') {
+  // Handle all text layer types (text, i-text)
+  // NOTE: Removed enhanced-text reference - using unified IText approach now
+  if (obj.type === 'text' || obj.type === 'i-text' /* || obj.type === 'enhanced-text' */) {
     // Try multiple ways to access the text content
     let textContent = '';
     
@@ -143,7 +144,9 @@ export function getLayerName(obj: any, index: number): string {
     
     // Fallback: Return a default name based on the text type
     if (!textContent.trim()) {
-      return obj.type === 'enhanced-text' ? 'Enhanced Text' : 'Text';
+      // NOTE: Removed enhanced-text reference - using unified IText approach now
+      // return obj.type === 'enhanced-text' ? 'Enhanced Text' : 'Text';
+      return 'Text';
     }
     
     // Truncate if too long

@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, Minimize, RotateCcw } from 'lucide-react';
+import { Send, Sparkles, Minimize, RotateCcw, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -11,18 +10,36 @@ import { useGlobalChat } from '../ai-chat/hooks/useGlobalChat';
 import { ContextIndicator } from './components/ContextIndicator';
 import { ToolProgress } from './components/ToolProgress';
 import { TypingIndicator } from './components/TypingIndicator';
+import { ChatInput } from './components/ChatInput';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
-  content: string;
+  content: string | Array<{
+    type: 'text' | 'image';
+    text?: string;
+    source?: {
+      type: 'base64';
+      media_type: string;
+      data: string;
+    };
+  }>;
   timestamp: number;
   isActive?: boolean;
   toolCalls?: Array<{
+    id?: string;
     name: string;
     status: 'running' | 'success' | 'error';
     result?: any;
   }>;
+  imageData?: {
+    file: File;
+    base64: string;
+    preview: string;
+  };
 }
 
 interface GlobalChatOverlayProps {
@@ -32,7 +49,6 @@ interface GlobalChatOverlayProps {
 
 export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -43,7 +59,10 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
     streamingResponse, 
     toolExecutionStatuses,
     activeMessage,
-    resetSession
+    resetSession,
+    promptOptions,
+    selectedPromptId,
+    selectPrompt
   } = useGlobalChat();
 
   // Auto-scroll to bottom
@@ -95,13 +114,12 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
 
   const handleResetSession = () => {
     setMessages([]);
-    setInput('');
     resetSession();
     console.log('[GlobalChatOverlay] Session and messages reset');
   };
 
-  const handleSendMessage = async () => {
-    if (!input.trim()) return;
+  const handleSendMessage = async (message: string, imageData?: { file: File; base64: string }) => {
+    if (!message.trim()) return;
     
     setIsLoading(true);
     
@@ -110,12 +128,42 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
     const userMessageId = `user-${conversationId}`;
     const assistantMessageId = `assistant-${conversationId}`;
     
+    // Create user message with image support
+    let messageContent: string | Array<any> = message.trim();
+    let userMessageImageData: any = undefined;
+
+    if (imageData) {
+      // For display purposes - keep structured content
+      messageContent = [
+        {
+          type: 'text',
+          text: message.trim()
+        },
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: imageData.file.type || 'image/jpeg',
+            data: imageData.base64
+          }
+        }
+      ];
+      
+      // Store image data for preview
+      userMessageImageData = {
+        file: imageData.file,
+        base64: imageData.base64,
+        preview: URL.createObjectURL(imageData.file)
+      };
+    }
+    
     // Add user message
     const newUserMessage: ChatMessage = {
       id: userMessageId,
       role: 'user',
-      content: input.trim(),
-      timestamp: Date.now()
+      content: messageContent,
+      timestamp: Date.now(),
+      imageData: userMessageImageData
     };
     
     // Add an initial empty assistant message that will show loading state
@@ -128,17 +176,17 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
     };
     
     setMessages(prev => [...prev, newUserMessage, initialAssistantMessage]);
-    setInput('');
     
     try {
       console.log('[GlobalChatOverlay] 🚀 Starting sendMessage...');
       const response = await sendMessage(
-        input.trim(), 
-        currentContext, 
-        availableTools, 
+        message.trim(), 
+        currentContext,
+        availableTools,
         assistantMessageId, 
         false, 
-        true
+        true,
+        imageData
       );
       
       console.log('[GlobalChatOverlay] 📥 Got response:', {
@@ -199,13 +247,6 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -221,6 +262,49 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
             </div>
             
             <div className="flex items-center gap-1">
+              {/* Prompt Selector */}
+              {promptOptions.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex items-center gap-1"
+                      title="Change AI system prompt"
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span className="text-xs hidden sm:inline-block">Prompt</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" align="end">
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm">Select System Prompt</h4>
+                      <p className="text-xs text-muted-foreground">Choose which prompt style to use for this chat session.</p>
+                      
+                      <RadioGroup 
+                        value={selectedPromptId} 
+                        onValueChange={selectPrompt}
+                        className="pt-2"
+                      >
+                        {promptOptions.map(option => (
+                          <div key={option.id} className="flex items-start space-x-2 py-1">
+                            <RadioGroupItem value={option.id} id={`prompt-${option.id}`} />
+                            <div className="grid gap-0.5">
+                              <Label htmlFor={`prompt-${option.id}`} className="font-medium">
+                                {option.name}
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                {option.description}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              
               <Button
                 variant="ghost"
                 size="sm"
@@ -289,7 +373,34 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
                           }`}
                         >
                           <div className="text-sm whitespace-pre-wrap">
-                            {message.content}
+                            {/* Render message content - handle both string and array formats */}
+                            {typeof message.content === 'string' ? (
+                              message.content
+                            ) : Array.isArray(message.content) ? (
+                              message.content.map((item, index) => (
+                                <div key={index}>
+                                  {item.type === 'text' && item.text}
+                                  {item.type === 'image' && item.source && (
+                                    <img 
+                                      src={`data:${item.source.media_type};base64,${item.source.data}`}
+                                      alt="Uploaded reference"
+                                      className="max-w-xs rounded mt-2"
+                                    />
+                                  )}
+                                </div>
+                              ))
+                            ) : null}
+                            
+                            {/* Show image preview if available */}
+                            {message.imageData && (
+                              <div className="mt-2">
+                                <img 
+                                  src={message.imageData.preview}
+                                  alt="Reference"
+                                  className="max-w-xs rounded border"
+                                />
+                              </div>
+                            )}
                             
                             {/* Show typing indicator if this is active message with no content yet */}
                             {message.isActive && !message.content && !streamingResponse && (
@@ -304,24 +415,31 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
                             )}
                           </div>
                           
-                          {/* Show tools for active or completed messages */}
+                          {/* Show tools for active or completed messages - filtered by message ID */}
                           {message.role === 'assistant' && message.isActive && toolExecutionStatuses.size > 0 && (
                             <div className="mt-2 space-y-1">
-                              {Array.from(toolExecutionStatuses.values()).map((status: unknown) => {
-                                const toolStatus = status as {
-                                  toolName: string;
-                                  status: 'running' | 'success' | 'error' | string;
-                                  result?: any;
-                                  executionId?: string;
-                                };
-                                return (
-                                  <ToolProgress
-                                    key={toolStatus.executionId || toolStatus.toolName} 
-                                    toolName={toolStatus.toolName || 'Tool'}
-                                    status={toolStatus.status as 'running' | 'success' | 'error'}
-                                    result={toolStatus.result}
-                                  />
-                                );
+                              {Array.from(toolExecutionStatuses.values())
+                                .filter((status: any) => {
+                                  // IMPORTANT: Only show tool statuses that are EXPLICITLY associated with this message ID
+                                  // Null or undefined messageId should NOT be shown (fixes duplication bug)
+                                  return status.messageId === message.id;
+                                })
+                                .map((status: unknown) => {
+                                  const toolStatus = status as {
+                                    toolName: string;
+                                    status: 'running' | 'success' | 'error' | string;
+                                    result?: any;
+                                    executionId?: string;
+                                    messageId?: string;
+                                  };
+                                  return (
+                                    <ToolProgress
+                                      key={`${message.id}-${toolStatus.executionId || toolStatus.toolName}`} 
+                                      toolName={toolStatus.toolName || 'Tool'}
+                                      status={toolStatus.status as 'running' | 'success' | 'error'}
+                                      result={toolStatus.result}
+                                    />
+                                  );
                               })}
                             </div>
                           )}
@@ -331,7 +449,7 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
                             <div className="mt-2 space-y-1">
                               {message.toolCalls.map((toolCall) => (
                                 <ToolProgress
-                                  key={toolCall.name}
+                                  key={`${message.id}-${toolCall.id || toolCall.name}`}
                                   toolName={toolCall.name}
                                   status={toolCall.status as 'running' | 'success' | 'error'}
                                   result={toolCall.result}
@@ -348,53 +466,16 @@ export function GlobalChatOverlay({ isOpen, onClose }: GlobalChatOverlayProps) {
                 </ScrollArea>
               </CardContent>
 
-              {/* Input */}
-              <div className="p-3 border-t bg-gray-50">
-                <div className="flex gap-2">
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyPress}
-                    placeholder={
-                      currentContext?.provider === 'retouchr'
-                        ? "Ask me to edit your design..."
-                        : "How can I help you?"
-                    }
-                    className="flex-1"
-                    disabled={isLoading}
-                  />
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!input.trim() || isLoading}
-                    size="icon"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
-                
-                <div className="flex flex-col gap-1 mt-2 text-xs text-gray-500">
-                  {/* Simple static messages for now */}
-                  {messages.some(m => m.toolCalls?.some(t => t.status === 'running')) && (
-                    <div className="rounded border px-2 py-1 bg-blue-50 text-blue-700">
-                      ⚙️ Using tool...
-                    </div>
-                  )}
-                  
-                  {messages.some(m => m.toolCalls?.some(t => t.status === 'success')) && (
-                    <div className="rounded border px-2 py-1 bg-green-50 text-green-700">
-                      ✅ Tool used
-                    </div>
-                  )}
-                  
-                  {messages.some(m => m.toolCalls?.some(t => t.status === 'error')) && (
-                    <div className="rounded border px-2 py-1 bg-red-50 text-red-700">
-                      ❌ Tool failed
-                    </div>
-                  )}
-                  
-                  {streamingResponse && <span>...</span>}
-                </div>
-              </div>
+              {/* Chat Input with Image Support */}
+              <ChatInput
+                onSubmit={handleSendMessage}
+                disabled={isLoading}
+                placeholder={
+                  currentContext?.provider === 'retouchr'
+                    ? "Ask me to edit your design or upload a reference image..."
+                    : "How can I help you?"
+                }
+              />
             </>
         </Card>
       </div>

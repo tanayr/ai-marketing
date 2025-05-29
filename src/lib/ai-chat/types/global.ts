@@ -14,17 +14,31 @@ export interface GlobalChatContext {
   selectedObjects?: any[];
   user?: any;
   organization?: any;
+  promptId?: string; // Add promptId field to enable prompt selection
 }
 
 // Chat message types
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | Array<{
+    type: 'text' | 'image';
+    text?: string;
+    source?: {
+      type: 'base64';
+      media_type: string;
+      data: string;
+    };
+  }>;
   timestamp: number;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   provider?: string;
+  imageData?: {
+    file: File;
+    base64: string;
+    preview: string;
+  };
 }
 
 // Tool call from Claude

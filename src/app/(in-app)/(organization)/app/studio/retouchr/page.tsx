@@ -27,6 +27,15 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { CreativeInspirationsModal } from '@/components/studio/retouchr/creative-inspirations/CreativeInspirationsModal';
+import { ConfirmationStep } from '@/components/studio/retouchr/creative-inspirations/components/ConfirmationStep';
+import { GenerationStep } from '@/components/studio/retouchr/creative-inspirations/components/GenerationStep';
+import { GenerateCreativeContent } from '@/components/studio/retouchr/creative-inspirations/components/GenerateCreativeContent';
+import { useAIImageGeneration } from '@/components/studio/retouchr/creative-inspirations/hooks/useAIImageGeneration';
+import { InspirationGallery } from '@/components/studio/retouchr/creative-inspirations/components/InspirationGallery';
+import { ProductSelector } from '@/components/studio/retouchr/creative-inspirations/components/ProductSelector';
+import { CreativeInspiration } from '@/db/schema/creative-inspirations';
+import { ShopifyProduct } from '@/db/schema/shopify-products';
 import { saveLayerGroupsForCanvas, generateCanvasHash } from '@/components/studio/retouchr/fLayers/storage/layerPersistence';
 
 // CSS override to remove padding and width restrictions on parent containers
@@ -48,11 +57,19 @@ export default function RetouchrStudioPage() {
   const [designData, setDesignData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showNewDesignDialog, setShowNewDesignDialog] = useState(false);
-  const [newDesignName, setNewDesignName] = useState('');
-  const [designWidth, setDesignWidth] = useState('800');
-  const [designHeight, setDesignHeight] = useState('600');
+  const [newDesignName, setNewDesignName] = useState('Untitled Design');
+  const [designWidth, setDesignWidth] = useState('1080');
+  const [designHeight, setDesignHeight] = useState('1080');
   const [backgroundColor, setBackgroundColor] = useState('#ffffff');
   const [isCreating, setIsCreating] = useState(false);
+  const [showInspirationModal, setShowInspirationModal] = useState(false);
+  const [selectedInspiration, setSelectedInspiration] = useState<CreativeInspiration | null>(null);
+  
+  // New design dialog steps
+  type NewDesignStep = 'properties' | 'inspirations' | 'product-selection' | 'confirmation' | 'generation';
+  const [newDesignStep, setNewDesignStep] = useState<NewDesignStep>('properties');
+  const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
+  const { isGenerating } = useAIImageGeneration();
 
   // Force sidebar to be collapsed when in retouchr studio
   useEffect(() => {
@@ -152,6 +169,42 @@ export default function RetouchrStudioPage() {
     }
   };
 
+  // Create a design from inspiration
+  const handleCreateDesignFromInspiration = async (imageUrl: string, size: { width: number, height: number }, name: string) => {
+    try {
+      setIsCreating(true);
+
+      const response = await fetch('/api/app/studio/retouchr', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name,
+          width: size.width,
+          height: size.height,
+          backgroundColor: '#ffffff',
+          imageUrl: imageUrl
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create design from inspiration');
+      }
+
+      const data = await response.json();
+      
+      // Redirect to the new design
+      router.push(`/app/studio/retouchr?id=${data.id}`);
+      
+    } catch (error) {
+      console.error('Error creating design from inspiration:', error);
+      toast.error('Failed to create design from inspiration');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   // Save design changes
   const handleSaveDesign = async (data: any) => {
 
@@ -182,91 +235,179 @@ export default function RetouchrStudioPage() {
 
       {/* NewDesign Dialog */}
       <Dialog open={showNewDesignDialog} onOpenChange={setShowNewDesignDialog}>
-        <DialogContent className="sm:max-w-md p-0">
-          <div className="p-6 sm:p-8">
-            <DialogHeader className="pb-4">
-              <DialogTitle>Create New Design</DialogTitle>
-              <DialogDescription>
-                Set up the dimensions and properties for your new design.
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-5xl p-0 max-h-[90vh] overflow-hidden rounded-lg border shadow-lg">
+          <div className="flex flex-col md:flex-row h-full">
+            {/* Left side - Design properties */}
+            <div className="p-8 sm:p-10 border-r md:w-1/3 overflow-y-auto">
+              <DialogHeader className="pb-6">
+                <DialogTitle className="text-2xl font-bold">Create New Design</DialogTitle>
+                <DialogDescription className="mt-2 text-base">
+                  Set up the dimensions and properties for your new design.
+                </DialogDescription>
+              </DialogHeader>
 
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="design-name">Design Name</Label>
-                <Input
-                  id="design-name"
-                  value={newDesignName}
-                  onChange={(e) => setNewDesignName(e.target.value)}
-                  placeholder="My Awesome Design"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="design-width">Width (px)</Label>
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label htmlFor="design-name">Design Name</Label>
                   <Input
-                    id="design-width"
-                    value={designWidth}
-                    onChange={(e) => setDesignWidth(e.target.value.replace(/\D/g, ''))}
-                    type="number"
-                    min="50"
-                    max="3000"
+                    id="design-name"
+                    value={newDesignName}
+                    onChange={(e) => setNewDesignName(e.target.value)}
+                    placeholder="My Awesome Design"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="design-height">Height (px)</Label>
-                  <Input
-                    id="design-height"
-                    value={designHeight}
-                    onChange={(e) => setDesignHeight(e.target.value.replace(/\D/g, ''))}
-                    type="number"
-                    min="50"
-                    max="3000"
-                  />
-                </div>
-              </div>
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="design-width">Width (px)</Label>
+                    <Input
+                      id="design-width"
+                      value={designWidth}
+                      onChange={(e) => setDesignWidth(e.target.value.replace(/\D/g, ''))}
+                      type="number"
+                      min="50"
+                      max="3000"
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="background-color">Background Color</Label>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded border"
-                    style={{ backgroundColor }}
-                  />
-                  <Input
-                    id="background-color"
-                    value={backgroundColor}
-                    onChange={(e) => setBackgroundColor(e.target.value)}
-                    placeholder="#ffffff"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="design-height">Height (px)</Label>
+                    <Input
+                      id="design-height"
+                      value={designHeight}
+                      onChange={(e) => setDesignHeight(e.target.value.replace(/\D/g, ''))}
+                      type="number"
+                      min="50"
+                      max="3000"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="background-color">Background Color</Label>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-8 h-8 rounded border"
+                      style={{ backgroundColor }}
+                    />
+                    <Input
+                      id="background-color"
+                      value={backgroundColor}
+                      onChange={(e) => setBackgroundColor(e.target.value)}
+                      placeholder="#ffffff"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-6 mt-2">
+                  <DialogFooter className="flex sm:justify-between gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        // If there's an ID in URL, just close dialog
+                        const params = new URLSearchParams(window.location.search);
+                        if (params.get('id')) {
+                          setShowNewDesignDialog(false);
+                        } else {
+                          // Otherwise go to main studio page
+                          router.push('/app/studio');
+                        }
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateNewDesign} disabled={isCreating}>
+                      {isCreating ? 'Creating...' : 'Create Design'}
+                    </Button>
+                  </DialogFooter>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="p-6 sm:p-8 pt-0">
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  // If there's an ID in URL, just close dialog
-                  const params = new URLSearchParams(window.location.search);
-                  if (params.get('id')) {
-                    setShowNewDesignDialog(false);
-                  } else {
-                    // Otherwise go to main studio page
-                    router.push('/app/studio');
-                  }
+            {newDesignStep === 'properties' && (
+              /* Right side - Creative inspirations */
+              <div className="p-8 sm:p-10 md:w-2/3 overflow-y-auto bg-muted/10">
+                <h3 className="font-semibold text-xl mb-6">Or start with a creative inspiration</h3>
+                <InspirationGallery onSelect={(inspiration: CreativeInspiration) => {
+                  // Update dimensions based on inspiration
+                  setDesignWidth(inspiration.width);
+                  setDesignHeight(inspiration.height);
+                  setNewDesignName(`${inspiration.name} Design`);
+                  
+                  // Save the selected inspiration
+                  setSelectedInspiration(inspiration);
+                  
+                  // Switch to product selection step
+                  setNewDesignStep('product-selection');
+                }} />
+              </div>
+            )}
+            
+            {/* Product selection step */}
+            {newDesignStep === 'product-selection' && selectedInspiration && (
+              <div className="p-8 sm:p-10 md:w-2/3 overflow-hidden bg-muted/10 flex flex-col">
+                <div className="flex items-center gap-2 mb-6">
+                  <Button 
+                    variant="ghost" 
+                    className="p-0 h-8 w-8" 
+                    onClick={() => {
+                      setNewDesignStep('properties');
+                      setSelectedInspiration(null);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+                  </Button>
+                  <div>
+                    <h3 className="font-semibold text-xl">Select a Product</h3>
+                    <p className="text-muted-foreground text-sm">Choose a product to use with {selectedInspiration.name}</p>
+                  </div>
+                </div>
+                
+                <div className="mt-4 overflow-y-auto flex-1" style={{ maxHeight: 'calc(80vh - 160px)' }}>
+                  <ProductSelector 
+                    hideHeader={true}
+                    onSelect={(product: ShopifyProduct) => {
+                      // Store the selected product and move to confirmation step
+                      setSelectedProduct(product);
+                      setNewDesignStep('confirmation');
+                    }} 
+                    onBack={() => {
+                      setNewDesignStep('properties');
+                      setSelectedInspiration(null);
+                    }} 
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Confirmation step */}
+            {newDesignStep === 'confirmation' && selectedInspiration && selectedProduct && (
+              <ConfirmationStep
+                product={selectedProduct}
+                inspiration={selectedInspiration}
+                onBack={() => setNewDesignStep('product-selection')}
+                onGenerate={() => {
+                  // Move to the generation step to show progress
+                  setNewDesignStep('generation');
                 }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleCreateNewDesign} disabled={isCreating}>
-                {isCreating ? 'Creating...' : 'Create Design'}
-              </Button>
-            </DialogFooter>
+                isGenerating={isGenerating}
+              />
+            )}
+
+            {/* Generation step with AI streaming */}
+            {newDesignStep === 'generation' && selectedInspiration && selectedProduct && (
+              <GenerateCreativeContent 
+                inspiration={selectedInspiration} 
+                product={selectedProduct} 
+                onComplete={() => {
+                  // Close dialog and reset state
+                  setShowNewDesignDialog(false);
+                  setNewDesignStep('properties');
+                  setSelectedInspiration(null);
+                  setSelectedProduct(null);
+                }}
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -291,6 +432,7 @@ export default function RetouchrStudioPage() {
                 designName={designData?.name || 'Untitled Design'}
                 lastUpdated={designData?.updatedAt ? new Date(designData.updatedAt).toLocaleString() : undefined}
                 onNewDesign={() => setShowNewDesignDialog(true)}
+                onBrowseInspirations={() => setShowInspirationModal(true)}
               />
             </div>
             {/* Debug info */}
@@ -304,6 +446,18 @@ export default function RetouchrStudioPage() {
         )}
       </div>
     </div>
+
+      {/* Creative Inspirations Modal */}
+      <CreativeInspirationsModal 
+        isOpen={showInspirationModal}
+        onClose={() => {
+          setShowInspirationModal(false);
+          setSelectedInspiration(null);
+        }}
+        onCreateDesign={handleCreateDesignFromInspiration}
+        initialStep={selectedInspiration ? 'product' : 'inspiration'}
+        initialInspiration={selectedInspiration}
+      />
     </>
   );
 }

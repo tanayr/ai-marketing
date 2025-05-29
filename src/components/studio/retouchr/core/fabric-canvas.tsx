@@ -3,6 +3,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { fabric } from '../utils/fabric-imports';
 import dynamic from 'next/dynamic';
+import { initializeFabric } from '../utils/initialize-fabric';
 
 export interface FabricCanvasProps {
   width: number;
@@ -30,6 +31,9 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
   useEffect(() => {
     // Safety check for browser environment
     if (typeof window === 'undefined' || !canvasRef.current) return;
+    
+    // Initialize fabric extensions (including enhanced IText)
+    initializeFabric();
     
     // Safely create canvas with error handling
     let canvas;

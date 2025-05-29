@@ -58,6 +58,13 @@ export class AdvancedText extends fabric.IText {
     this.textTransform = options.textTransform || 'none';
     this.padding = options.padding || 0;
     this.borderRadius = options.borderRadius || 0;
+    
+    // Preserve ID from options or create a new one if not provided
+    if (options.id) {
+      this.id = options.id;
+    } else if (!this.id) {
+      this.id = `text_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    }
   }
 
   /**
@@ -74,7 +81,8 @@ export class AdvancedText extends fabric.IText {
       textTransform: this.textTransform,
       padding: this.padding,
       borderRadius: this.borderRadius,
-      type: AdvancedText.type
+      type: AdvancedText.type,
+      id: this.id
     };
   }
 
@@ -297,6 +305,20 @@ export class AdvancedText extends fabric.IText {
 
 // Register with fabric
 (fabric as any).AdvancedText = AdvancedText;
+
+// Add ID to the list of properties to be cached
+fabric.util.object.extend(AdvancedText.prototype, {
+  cacheProperties: fabric.IText.prototype.cacheProperties.concat([
+    'textShadow',
+    'textOutline',
+    'textGradient',
+    'letterSpacing',
+    'textTransform',
+    'padding',
+    'borderRadius',
+    'id'
+  ])
+});
 
 // Export advanced text effects utilities
 export const TextEffects = {

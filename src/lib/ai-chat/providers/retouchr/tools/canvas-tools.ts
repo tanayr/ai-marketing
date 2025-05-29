@@ -56,7 +56,7 @@ export const canvasTools: ToolDefinition[] = [
           return { success: false, error: 'No canvas available' };
         }
 
-        const canvasData = canvas.toJSON(['id', 'name', 'selectable', 'evented']);
+        // Note: We no longer include the full canvas JSON in the response
         const objects = canvas.getObjects();
         
         const state = {
@@ -90,8 +90,8 @@ export const canvasTools: ToolDefinition[] = [
                   src: (obj as any).getSrc?.() || 'unknown'
                 }
               : {})
-          })),
-          fullCanvasJSON: canvasData
+          }))
+          // fullCanvasJSON field removed to reduce payload size
         };
 
         return {

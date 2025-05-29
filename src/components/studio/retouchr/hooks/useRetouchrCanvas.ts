@@ -6,6 +6,7 @@ import { CanvasContext, CanvasContextType } from './use-canvas';
 interface RetouchrCanvasData {
   canvas: any | null;
   selectedObjects: any[];
+  selectedObject: any | null;
   canvasReady: boolean;
 }
 
@@ -17,6 +18,7 @@ export function useRetouchrCanvas(): RetouchrCanvasData {
     return {
       canvas: null,
       selectedObjects: [],
+      selectedObject: null,
       canvasReady: false
     };
   }
@@ -26,6 +28,7 @@ export function useRetouchrCanvas(): RetouchrCanvasData {
   return {
     canvas,
     selectedObjects,
+    selectedObject: selectedObjects && selectedObjects.length > 0 ? selectedObjects[0] : null,
     canvasReady: !!canvas
   };
 }

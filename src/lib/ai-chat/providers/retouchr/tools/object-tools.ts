@@ -4,6 +4,7 @@
  */
 
 import { ToolDefinition, ToolExecutionResult } from '../../../types/providers';
+import { nanoid } from 'nanoid';
 
 // Fabric.js types for our context (runtime objects will be provided by canvas context)
 interface FabricCanvas {
@@ -21,6 +22,7 @@ interface FabricCanvas {
   getWidth(): number;
   getHeight(): number;
   discardActiveObject(): void;
+  fire?(eventName: string, options: any): any; // Added for event triggering
 }
 
 // Fabric.js object type
@@ -496,11 +498,17 @@ export const objectTools: ToolDefinition[] = [
             cloned?.set?.({
               left: (targetObject.left ?? 0) + offsetX,
               top: (targetObject.top ?? 0) + offsetY,
-              id: `${targetObject.id}_copy_${Date.now()}`,
+              id: `layer-${Date.now()}-${nanoid(6)}`,
               name: `${targetObject.name || targetObject.type}_copy`
             });
 
             canvas.add(cloned);
+            
+            // Ensure object:added event is fired for layer system integration
+            if (canvas.fire) {
+              canvas.fire('object:added', { target: cloned });
+            }
+            
             canvas.setActiveObject(cloned);
             canvas.renderAll();
 
